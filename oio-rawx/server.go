@@ -79,14 +79,19 @@ var (
 )
 
 var AttrMap []attrMapping = []attrMapping{
-	{"container.id", "Chunk-Meta-Container-Id"},
-	{"content.path", "Chunk-Meta-Content-Path"},
-	{"content.size", "Chunk-Meta-Content-Size"},
-	{"content.ver",  "Chunk-Meta-Content-Path"},
-	{"chunk.nb",     "Chunk-Meta-Content-Version"},
-	{"chunk.id",     "Chunk-Meta-Chunk-Id"},
-	{"chunk.size",   "Chunk-Meta-Chunk-Size"},
-	{"chunk.pos",    "Chunk-Meta-Chunk-Pos"},
+	{"container.id",           "Chunk-Meta-Container-Id"},
+	{"content.path",           "Chunk-Meta-Content-Path"},
+	{"content.id",             "Chunk-Meta-Content-Id"},
+	{"content.ver",            "Chunk-Meta-Content-Version"},
+	{"content.size",           "Chunk-Meta-Content-Size"},
+	{"content.nbchunk",        "Chunk-Meta-Content-Chunknb"},
+	{"content.storage_policy", "Chunk-Meta-Content-Storage-Policy"},
+	{"content.mime_type",      "Chunk-Meta-Content-Mime-Type"},
+	{"content.chunk_method",   "Chunk-Meta-Content-Chunk-Method"},
+	{"chunk.id",               "Chunk-Meta-Chunk-Id"},
+	{"chunk.size",             "Chunk-Meta-Chunk-Size"},
+	{"chunk.position",         "Chunk-Meta-Chunk-Pos"},
+	{"chunk.hash",             "Chunk-Meta-Chunk-Pos"},
 }
 
 type upload struct {
