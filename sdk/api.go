@@ -30,6 +30,29 @@ OpenIO SDS (Software Defined Storage) client SDK.
   	srcInfo, _ := src.Stat()
   	obj.PutContent("MyAccount", "MyBucket", "MyObjectInTheBucket", srcInfo.Size(), src)
   }
+
+OpenIO is a company providing open source software solutions.
+"OpenIO SDS" manages object storage software for massive storage infrastructures.
+It allows to easily build and run large scale storage platforms for all your apps.
+Please find more information on our homepage at http://openio.io, or our github.com acccunt at https://github.com/open-io.
+Please visit the the wiki at https://github.com/open-io/oio-sds/wiki for an extensive description.
+
+Quickly, you need to know that our object storage solutions manage several entities...
+A "namespace" names a physical platform hosting several services.
+An "account" is an entity used to virtually partition the namespace into logical units.
+All the accounts on a same namespace share the same platform, but have their own configuration and quotas.
+A "user" represents the end user managed by an account. An account might have (really) end users.
+A "container" is a collection of contents and properties. Containers are almost identical to Amazon S3's buckets.
+Eventually, the "contents" are objects (a.k.a. blobs, a.k.a. data without any expectation on the format) stored in containers.
+
+OpenIO SDS is composed of distributed entities:
+a "conscience" service responsible for the load-balancing among services,
+a "directory" for data-bound services,
+several kinds of "data-bound services" (and containers are such data that services bound to)
+and "stateless services".
+
+This SDK will present interfaces to thoses services.
+
 */
 package oio
 
@@ -48,7 +71,7 @@ import (
 
 // Returned when the target resource is not found, for any reason. E.g. if the
 // resource is an object in a container, ErrorNotFound can be returned if the
-// Reference doesn't exist, or the container, or the object itself.
+// User doesn't exist, or the container, or the object itself.
 var ErrorNotFound = errors.New("Resource not found")
 
 // The feature you are calling has not been implemented yet. This should not
@@ -65,8 +88,11 @@ var ErrorConfiguration = errors.New("Invalid configuration")
 const RAWX_HEADER_PREFIX = "X-oio-chunk-meta-"
 
 const (
-	KeyProxy      = "proxy"
-	KeyAutocreate = "autocreate"
+	KeyProxyConscience = "proxy-conscience"
+	KeyProxyContainer  = "proxy-container"
+	KeyProxyDirectory  = "proxy-dir"
+	KeyProxy           = "proxy"
+	KeyAutocreate      = "autocreate"
 )
 
 // Minimal interface for a configuration set
@@ -100,6 +126,7 @@ type RefDump struct {
 	Properties []Property `json:"props,omitempty"`
 }
 
+// Chunks are objects parts. Objects are chunked to ensure a content deposit won't ever suffer from a full filesystem, but only a full namespace.
 type Chunk struct {
 	Url      string `json:"url"`
 	Position string `json:"pos"`
@@ -107,6 +134,7 @@ type Chunk struct {
 	Hash     string `json:"hash"`
 }
 
+// A Content represents the minimal information stored in a container about a stored object.
 type Content struct {
 	Name           string `json:"name"`
 	Version        uint64 `json:"ver"`
@@ -128,57 +156,83 @@ type ContainerListing struct {
 // Client to the directory services of the Software Defined Storage.
 type Directory interface {
 
-	// Check the existence of a reference.
-	HasReference(account, reference string) (bool, error)
+	// Check the existence of an end user.
+	HasUser(account, user string) (bool, error)
 
-	// Create the reference in the direcory. It returns if something has been
+	// Create the end user in the direcory. It returns if something has been
 	// created or not: if the output is (false,nil) then the container already
 	// existed.
-	CreateReference(account, reference string) (bool, error)
+	CreateUser(account, user string) (bool, error)
 
-	DeleteReference(account, reference string) (bool, error)
-	DumpReference(account, reference string) (RefDump, error)
+	// Deletes the given end user. This will fail if the user is still linked
+	// to services or still carries properties. It might return (false,nil)
+	// if nothing was deleted (i.e. the container didn't exist).
+	DeleteUser(account, user string) (bool, error)
 
-	LinkServices(account, reference, srvtype string) ([]Service, error)
-	RenewServices(account, reference, srvtype string) ([]Service, error)
-	ForceServices(account, reference string, srv []Service) ([]Service, error)
-	ListServices(account, reference, srvtype string) ([]Service, error)
-	UnlinkServices(account, reference, srvtype string) (bool, error)
+	// Ask the directory a dump of the services and properties linked with the
+	// end user.
+	DumpUser(account, user string) (RefDump, error)
 
-	GetProperties(account, reference string) (map[string]string, error)
-	SetProperties(account, reference string, props map[string]string) (bool, error)
-	DeleteProperties(account, reference string, keys []string) (bool, error)
+	// Bind a user to a service of a given kind. The service will be polled by
+	// the directory service itself, using the conscience. If a service is
+	// already bound, the directory service will return this. Note that this
+	// is not guaranteed, since there is a check performed on the service: if
+	// it is still available, OK; but if it is down the directory service might
+	// be configured to replace it by an other instance of the same type.
+	LinkServices(account, user, srvtype string) ([]Service, error)
+
+	// Acts as LinkServices() but assumes the current service (if any) is down.
+	RenewServices(account, user, srvtype string) ([]Service, error)
+
+	// Bind the given service to the user. All the services in <srv> must
+	// carry the same sequence number or the behavior is unknown.
+	ForceServices(account, user string, srv []Service) ([]Service, error)
+
+	// Get a list of all the services of the given type, bound to the given
+	// service.
+	ListServices(account, user, srvtype string) ([]Service, error)
+	UnlinkServices(account, user, srvtype string) (bool, error)
+
+	GetProperties(account, user string) (map[string]string, error)
+	SetProperties(account, user string, props map[string]string) (bool, error)
+	DeleteProperties(account, user string, keys []string) (bool, error)
 }
 
 type Container interface {
-	CreateContainer(account, reference string) (bool, error)
-	DeleteContainer(account, reference string) (bool, error)
-	HasContainer(account, reference string) (bool, error)
+	CreateContainer(account, user string) (bool, error)
+	DeleteContainer(account, user string) (bool, error)
+	HasContainer(account, user string) (bool, error)
 
-	ListContents(account, reference string) (ContainerListing, error)
-	GetContent(account, reference, path string) ([]Chunk, []Property, error)
-	GenerateContent(account, reference, path string, size uint64) ([]Chunk, error)
-	PutContent(account, reference, path string, size uint64, chunks []Chunk) error
-	DeleteContent(account, reference, path string) (bool, error)
+	ListContents(account, user string) (ContainerListing, error)
+	GetContent(account, user, path string) ([]Chunk, []Property, error)
+	GenerateContent(account, user, path string, size uint64) ([]Chunk, error)
+	PutContent(account, user, path string, size uint64, chunks []Chunk) error
+	DeleteContent(account, user, path string) (bool, error)
 }
 
 type ObjectStorage interface {
-	PutContent(account, reference, path string, size uint64, in io.ReadSeeker) error
-	GetContent(account, reference, path string) (io.ReadCloser, error)
-	DeleteContent(account, reference, path string) error
+	PutContent(account, user, path string, size uint64, in io.ReadSeeker) error
+	GetContent(account, user, path string) (io.ReadCloser, error)
+	DeleteContent(account, user, path string) error
 }
 
 //------------------------------------------------------------------------------
 
+// Dummy Config implementation where everything is stored in a single map.
+// The map keys are encoded as "ns.key". This means the dot '.' is forbidden
+// in the namespace names to work properly.
 type StaticConfig struct {
 	pairs map[string]string
 }
 
+// Sets a configuration key for the given namespace
 func (cfg *StaticConfig) Set(ns, key, value string) {
 	k := strings.Join([]string{ns, key}, "/")
 	cfg.pairs[k] = value
 }
 
+// Get the raw value of a configuration key, if set. Otherwise an error is
+//returned.
 func (cfg *StaticConfig) GetString(ns, key string) (string, error) {
 	k := strings.Join([]string{ns, key}, "/")
 	v, ok := cfg.pairs[k]
@@ -599,7 +653,7 @@ func (cli *directoryClient) getTypeUrl(account, reference, srvtype string) strin
 		getProxyUrl(cli.ns, cli.config), cli.ns, account, reference, srvtype)
 }
 
-func (cli *directoryClient) HasReference(account, reference string) (bool, error) {
+func (cli *directoryClient) HasUser(account, reference string) (bool, error) {
 	url := cli.getRefUrl(account, reference)
 	req, _ := http.NewRequest("HEAD", url, nil)
 	ok, err := cli.simpleRequest(req)
@@ -609,20 +663,20 @@ func (cli *directoryClient) HasReference(account, reference string) (bool, error
 	return ok, err
 }
 
-func (cli *directoryClient) CreateReference(account, reference string) (bool, error) {
+func (cli *directoryClient) CreateUser(account, reference string) (bool, error) {
 	url := cli.getRefUrl(account, reference)
 	req, _ := http.NewRequest("PUT", url, nil)
 	req.Header.Set("X-oio-action-mode", cli.actionFlags(false))
 	return cli.simpleRequest(req)
 }
 
-func (cli *directoryClient) DeleteReference(account, reference string) (bool, error) {
+func (cli *directoryClient) DeleteUser(account, reference string) (bool, error) {
 	url := cli.getRefUrl(account, reference)
 	req, _ := http.NewRequest("DELETE", url, nil)
 	return cli.simpleRequest(req)
 }
 
-func (cli *directoryClient) DumpReference(account, reference string) (RefDump, error) {
+func (cli *directoryClient) DumpUser(account, reference string) (RefDump, error) {
 	url := cli.getRefUrl(account, reference)
 	req, _ := http.NewRequest("GET", url, nil)
 	tmp := RefDump{make([]Service, 0), make([]Service, 0), make([]Property, 0)}
