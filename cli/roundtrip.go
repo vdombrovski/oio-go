@@ -34,61 +34,68 @@ func main() {
 
 	var ok bool
 	var err error
-	var ns string = "NS"
-	var acct string = "ACCT"
-	var ref string = "JFS" + strconv.FormatUint(uint64(rand.Int63()), 10)
+
 	var dir oio.Directory
 	var bkt oio.Container
 	var obj oio.ObjectStorage
 
+	var ns string = "NS"
+
+	name := oio.FlatName{
+		N: ns,
+		A: "ACCT",
+		U: "JFS" + strconv.FormatUint(uint64(rand.Int63()), 10),
+		P: "plop",
+	}
+
 	cfg := oio.MakeStaticConfig()
-	cfg.Set("NS", "proxy", "127.0.0.1:6002")
-	cfg.Set("NS", "autocreate", "true")
+	cfg.Set(ns, "proxy", "127.0.0.1:6002")
+	cfg.Set(ns, "autocreate", "true")
 
 	dir, _ = oio.MakeDirectoryClient(ns, cfg)
 	bkt, _ = oio.MakeContainerClient(ns, cfg)
 	obj, _ = oio.MakeObjectStorageClient(dir, bkt)
 
-	log.Println("+++ References")
+	log.Println("+++ Users")
 	for i := 0; i < 2; i++ {
-		ok, err = dir.HasReference(acct, ref)
+		ok, err = dir.HasUser(&name)
 		if err != nil {
-			log.Fatal("HasReference() error: ", err)
+			log.Fatal("HasUser() error: ", err)
 		}
 
 		if ok {
-			log.Println("Reference present")
+			log.Println("User present")
 		} else {
-			ok, err = dir.CreateReference(acct, ref)
+			ok, err = dir.CreateUser(&name)
 			if err != nil {
-				log.Fatal("CreateReference() error: ", err)
+				log.Fatal("CreateUser() error: ", err)
 			}
 			if ok {
-				log.Println("Reference created")
+				log.Println("User created")
 			} else {
-				log.Println("Reference already present")
+				log.Println("User already present")
 			}
 		}
 
-		ok, err = dir.DeleteReference(acct, ref)
+		ok, err = dir.DeleteUser(&name)
 		if err != nil {
-			log.Fatal("DeleteReference() error: ", err)
+			log.Fatal("DeleteUser() error: ", err)
 		}
 	}
 
 	log.Println("+++ Container")
 	for i := 0; i < 2; i++ {
-		ok, err = bkt.HasContainer(acct, ref)
+		ok, err = bkt.HasContainer(&name)
 		if err != nil {
 			log.Fatal("HasContainer() error: ", err)
 		}
 		if !ok {
-			ok, err = bkt.CreateContainer(acct, ref)
+			ok, err = bkt.CreateContainer(&name)
 			if err != nil {
 				log.Fatal("CreateContainer() error: ", err)
 			}
 		}
-		ok, err = bkt.DeleteContainer(acct, ref)
+		ok, err = bkt.DeleteContainer(&name)
 		if err != nil {
 			log.Fatal("DeleteContainer() error: ", err)
 		}
@@ -99,12 +106,12 @@ func main() {
 		var size uint64 = 4000
 		bulk := make([]byte, size)
 		bulkReader := bytes.NewReader(bulk)
-		err = obj.PutContent(acct, ref, "plop", size, bulkReader)
+		err = obj.PutContent(&name, size, bulkReader)
 		log.Println("PutContent(): ", err)
 	}
 	for i := 0; i < 2; i++ {
 		var dl io.ReadCloser
-		dl, err = obj.GetContent(acct, ref, "plop")
+		dl, err = obj.GetContent(&name)
 		if err != nil {
 			log.Fatal("GetContent() error: ", err)
 		} else {
@@ -126,7 +133,7 @@ func main() {
 		}
 	}
 	for i := 0; i < 2; i++ {
-		err = obj.DeleteContent(acct, ref, "plop")
+		err = obj.DeleteContent(&name)
 		log.Println("DeleteContent(): ", err)
 	}
 
