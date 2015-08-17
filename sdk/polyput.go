@@ -20,6 +20,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -85,11 +86,13 @@ func (pp *polyPut) do(src polyPutSource) error {
 		sub.req, err = http.NewRequest("PUT", url, sub)
 		sub.req.Header.Set("Content-Type", "octet/stream")
 		// No chunk encoding in this case, the size is known
-		//sub.req.ContentLength = src.Len()
-		//sub.req.TransferEncoding = make([]string, 0)
+		sub.req.ContentLength = src.Len()
+		sub.req.TransferEncoding = make([]string, 0)
 		for _, kv := range pp.headers {
 			sub.req.Header.Set(kv.key, kv.value)
 		}
+
+		sub.req.Header.Set(RAWX_HEADER_PREFIX+"chunk-id", filepath.Base(url))
 		subs = append(subs, sub)
 	}
 

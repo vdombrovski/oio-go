@@ -17,9 +17,11 @@
 package oio
 
 import (
+	"encoding/hex"
 	"errors"
 	"io"
 	"strconv"
+	"strings"
 )
 
 type objectStorageClient struct {
@@ -78,6 +80,8 @@ func (cli *objectStorageClient) PutContent(n ObjectName, size uint64, src io.Rea
 		}
 	}
 
+	cid := strings.ToUpper(hex.EncodeToString(ComputeUserId(n)))
+
 	// upload each meta-chunk
 	for i, _ := range mcSet {
 		mc := &(mcSet[i])
@@ -86,13 +90,14 @@ func (cli *objectStorageClient) PutContent(n ObjectName, size uint64, src io.Rea
 			pp.addTarget(chunk.Url)
 		}
 		pp.addHeader("X-oio-req-id", "0")
-		pp.addHeader(RAWX_HEADER_PREFIX+"container-id", "0000000000000000000000000000000000000000000000000000000000000000")
+		pp.addHeader(RAWX_HEADER_PREFIX+"container-id", cid)
 		pp.addHeader(RAWX_HEADER_PREFIX+"content-path", n.Path())
 		pp.addHeader(RAWX_HEADER_PREFIX+"content-size", strconv.FormatUint(size, 10))
 		pp.addHeader(RAWX_HEADER_PREFIX+"content-chunksnb", strconv.Itoa(len(mcSet)))
 		pp.addHeader(RAWX_HEADER_PREFIX+"content-metadata-sys", "")
-		pp.addHeader(RAWX_HEADER_PREFIX+"chunk-id", "0000000000000000000000000000000000000000000000000000000000000000")
 		pp.addHeader(RAWX_HEADER_PREFIX+"chunk-pos", strconv.Itoa(i))
+		// the chunk-id is set by the "polyput" itself, because it varies
+		// for each chunk
 		r := makeSliceReader(src, mc.meta_size)
 		err = pp.do(&r)
 		if err != nil {
