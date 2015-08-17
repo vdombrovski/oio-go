@@ -31,11 +31,11 @@ type directoryClient struct {
 }
 
 type proxyError struct {
-	status  int `json:"status"`
+	status  int    `json:"status"`
 	message string `json:"message"`
 }
 
-func readProxyError (rep *http.Response) error {
+func readProxyError(rep *http.Response) error {
 	var pe proxyError
 	decoder := json.NewDecoder(rep.Body)
 	if err := decoder.Decode(&pe); err != nil {
