@@ -25,24 +25,24 @@ import (
 	"strings"
 )
 
-type directoryClient struct {
-	config Config
-	ns     string
-}
-
 type proxyError struct {
 	status  int    `json:"status"`
 	message string `json:"message"`
 }
 
-func readProxyError(rep *http.Response) error {
+func readProxyError(httpCode int, rep *http.Response) error {
 	var pe proxyError
 	decoder := json.NewDecoder(rep.Body)
 	if err := decoder.Decode(&pe); err != nil {
-		return errors.New("Proxy error: no JSON explation")
+		return errors.New(fmt.Sprintf("Proxy error: (%d) %s", httpCode, err.Error()))
 	} else {
-		return errors.New(fmt.Sprintf("Proxy error: (%d) %s", pe.status, pe.message))
+		return errors.New(fmt.Sprintf("Proxy error: (%d) (%d) %s", httpCode, pe.status, pe.message))
 	}
+}
+
+type directoryClient struct {
+	config Config
+	ns     string
 }
 
 func (cli *directoryClient) actionFlags(force bool) string {
@@ -75,7 +75,7 @@ func (cli *directoryClient) serviceRequest(req *http.Request) ([]Service, error)
 	} else if rep.StatusCode == 404 {
 		return tab, ErrorNotFound
 	} else {
-		return tab, readProxyError(rep)
+		return tab, readProxyError(rep.StatusCode, rep)
 	}
 }
 
@@ -94,18 +94,17 @@ func (cli *directoryClient) simpleRequest(req *http.Request) (bool, error) {
 	} else if rep.StatusCode == 404 {
 		return false, ErrorNotFound
 	} else {
-		return false, readProxyError(rep)
+		err = readProxyError(rep.StatusCode, rep)
+		return false, err
 	}
 }
 
 func (cli *directoryClient) getRefUrl(n UserName) string {
-	return fmt.Sprintf("http://%s/v2.0/dir/%s/%s/%s", getProxyUrl(cli.ns, cli.config),
-		cli.ns, n.Account(), n.User())
+	return fmt.Sprintf("http://%s/v2.0/dir/%s/%s/%s", getProxyDirectoryUrl(cli.ns, cli.config), cli.ns, n.Account(), n.User())
 }
 
 func (cli *directoryClient) getTypeUrl(n UserName, srvtype string) string {
-	return fmt.Sprintf("http://%s/v2.0/dir/%s/%s/%s/%s",
-		getProxyUrl(cli.ns, cli.config), cli.ns, n.Account(), n.User(), srvtype)
+	return fmt.Sprintf("http://%s/v2.0/dir/%s/%s/%s/%s", getProxyDirectoryUrl(cli.ns, cli.config), cli.ns, n.Account(), n.User(), srvtype)
 }
 
 func (cli *directoryClient) HasUser(n UserName) (bool, error) {
@@ -164,7 +163,7 @@ func (cli *directoryClient) DumpUser(n UserName) (RefDump, error) {
 	} else if rep.StatusCode == 404 {
 		return tmp, ErrorNotFound
 	} else {
-		return tmp, readProxyError(rep)
+		return tmp, readProxyError(rep.StatusCode, rep)
 	}
 }
 
@@ -242,7 +241,7 @@ func (cli *directoryClient) GetAllProperties(n UserName) (map[string]string, err
 	} else if rep.StatusCode == 404 {
 		return tab, ErrorNotFound
 	} else {
-		return tab, readProxyError(rep)
+		return tab, readProxyError(rep.StatusCode, rep)
 	}
 }
 

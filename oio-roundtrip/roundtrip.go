@@ -22,31 +22,41 @@ import (
 	"bytes"
 	"github.com/jfsmig/oio-go/sdk"
 	"io"
+	"flag"
 	"log"
 	"math/rand"
 	"strconv"
 	"time"
 )
 
+func randName(prefix string) string {
+	return prefix + "-" + strconv.FormatUint(uint64(rand.Int63()), 10)
+}
+
 func main() {
 
 	rand.Seed(time.Now().UnixNano())
 
+	var ns, acct, user, subtype, path string
+
 	var ok bool
 	var err error
-
 	var dir oio.Directory
 	var bkt oio.Container
 	var obj oio.ObjectStorage
 
-	var ns string = "NS"
+	flag.StringVar(&ns, "ns", "", "Namespace (mandatory)")
+	flag.StringVar(&user, "user", randName("user"), "User (optional)")
+	flag.StringVar(&path, "path", randName("path"), "Path (optional)")
+	flag.StringVar(&acct, "account", randName("acct"), "Account (optional)")
+	flag.StringVar(&subtype, "type", "", "Service subtype (optional)")
+	flag.Parse()
 
-	name := oio.FlatName{
-		N: ns,
-		A: "ACCT",
-		U: "JFS" + strconv.FormatUint(uint64(rand.Int63()), 10),
-		P: "plop",
+	if ns == "" {
+		log.Fatal("Namespace is not set")
 	}
+
+	name := oio.FlatName{ N: ns, A: acct, U: user, P:path }
 
 	cfg := oio.MakeStaticConfig()
 	cfg.Set(ns, "proxy", "127.0.0.1:6002")
@@ -80,6 +90,8 @@ func main() {
 		ok, err = dir.DeleteUser(&name)
 		if err != nil {
 			log.Fatal("DeleteUser() error: ", err)
+		} else {
+				log.Println("User deleted")
 		}
 	}
 
@@ -93,11 +105,19 @@ func main() {
 			ok, err = bkt.CreateContainer(&name)
 			if err != nil {
 				log.Fatal("CreateContainer() error: ", err)
+			} else if ok {
+				log.Println("Container created")
+			} else {
+				log.Println("Container nor created (already present)")
 			}
+		} else {
+			log.Println("Container already present")
 		}
 		ok, err = bkt.DeleteContainer(&name)
 		if err != nil {
 			log.Fatal("DeleteContainer() error: ", err)
+		} else {
+			log.Println("Container deleted")
 		}
 	}
 
@@ -107,7 +127,11 @@ func main() {
 		bulk := make([]byte, size)
 		bulkReader := bytes.NewReader(bulk)
 		err = obj.PutContent(&name, size, bulkReader)
-		log.Println("PutContent(): ", err)
+		if err != nil {
+			log.Fatal("PutContent(): ", err)
+		} else {
+			log.Println("Content uploaded")
+		}
 	}
 	for i := 0; i < 2; i++ {
 		var dl io.ReadCloser
@@ -115,26 +139,26 @@ func main() {
 		if err != nil {
 			log.Fatal("GetContent() error: ", err)
 		} else {
-			log.Println("GetContent() downloading ...")
+			var total uint64 = 0
 			var buf []byte = make([]byte, 8192)
 			for {
-				if n, err := dl.Read(buf); err != nil {
-					if err == io.EOF {
-						log.Println("... EOF!")
-						break
-					} else {
-						log.Fatal("GetContent() consumer error: ", err)
-					}
+				if n, err := dl.Read(buf); err == nil {
+					total = total + uint64(n)
+				} else if err == io.EOF {
+					break
 				} else {
-					log.Println("... consumed ", n, " bytes")
+					log.Fatal("GetContent() consumer error: ", err)
 				}
 			}
+			log.Println("Content downloaded (", total," bytes)")
 			dl.Close()
 		}
 	}
-	for i := 0; i < 2; i++ {
-		err = obj.DeleteContent(&name)
-		log.Println("DeleteContent(): ", err)
-	}
 
+	err = obj.DeleteContent(&name)
+	if err != nil {
+		log.Fatal("DeleteContent(): ", err)
+	} else {
+		log.Println("Content deleted")
+	}
 }

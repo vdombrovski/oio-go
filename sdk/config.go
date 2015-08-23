@@ -61,6 +61,30 @@ func getProxyUrl(ns string, cfg Config) string {
 	return u
 }
 
+func getProxyConscienceUrl(ns string, cfg Config) string {
+	u, err := cfg.GetString(ns, KeyProxyConscience)
+	if err != nil {
+		return getProxyUrl(ns, cfg)
+	}
+	return u
+}
+
+func getProxyContainerUrl(ns string, cfg Config) string {
+	u, err := cfg.GetString(ns, KeyProxyContainer)
+	if err != nil {
+		return getProxyUrl(ns, cfg)
+	}
+	return u
+}
+
+func getProxyDirectoryUrl(ns string, cfg Config) string {
+	u, err := cfg.GetString(ns, KeyProxyDirectory)
+	if err != nil {
+		return getProxyUrl(ns, cfg)
+	}
+	return u
+}
+
 func MakeStaticConfig() *StaticConfig {
 	cfg := new(StaticConfig)
 	cfg.pairs = make(map[string]string)

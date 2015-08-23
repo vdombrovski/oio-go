@@ -45,7 +45,7 @@ func (cli *containerClient) simpleRequest(req *http.Request) (bool, error) {
 	} else if rep.StatusCode == 404 {
 		return false, ErrorNotFound
 	} else {
-		return false, readProxyError(rep)
+		return false, readProxyError(rep.StatusCode, rep)
 	}
 }
 
@@ -61,7 +61,7 @@ func (cli *containerClient) actionFlags(force bool) string {
 }
 
 func (cli *containerClient) getRefUrl(n UserName) string {
-	return fmt.Sprintf("http://%s/v2.0/m2/%s/%s/%s", getProxyUrl(cli.ns, cli.config),
+	return fmt.Sprintf("http://%s/v2.0/m2/%s/%s/%s", getProxyContainerUrl(cli.ns, cli.config),
 		cli.ns, n.Account(), n.User())
 }
 
@@ -127,7 +127,7 @@ func (cli *containerClient) ListContents(n ContainerName) (ContainerListing, err
 	} else if rep.StatusCode == 404 {
 		return out, ErrorNotFound
 	} else {
-		return out, readProxyError(rep)
+		return out, readProxyError(rep.StatusCode, rep)
 	}
 }
 
@@ -157,7 +157,7 @@ func (cli *containerClient) GetContent(n ObjectName) ([]Chunk, []Property, error
 	} else if rep.StatusCode == 404 {
 		return chunks, props, ErrorNotFound
 	} else {
-		return chunks, props, readProxyError(rep)
+		return chunks, props, readProxyError(rep.StatusCode, rep)
 	}
 }
 
@@ -192,7 +192,7 @@ func (cli *containerClient) GenerateContent(n ObjectName, size uint64) ([]Chunk,
 	} else if rep.StatusCode == 404 {
 		return chunks, ErrorNotFound
 	} else {
-		return chunks, readProxyError(rep)
+		return chunks, readProxyError(rep.StatusCode, rep)
 	}
 }
 
@@ -222,7 +222,7 @@ func (cli *containerClient) PutContent(n ObjectName, size uint64, chunks []Chunk
 	} else if rep.StatusCode == 404 {
 		return ErrorNotFound
 	} else {
-		return readProxyError(rep)
+		return readProxyError(rep.StatusCode, rep)
 	}
 }
 
@@ -247,6 +247,6 @@ func (cli *containerClient) DeleteContent(n ObjectName) (bool, error) {
 	} else if rep.StatusCode == 404 {
 		return false, ErrorNotFound
 	} else {
-		return false, readProxyError(rep)
+		return false, readProxyError(rep.StatusCode, rep)
 	}
 }
