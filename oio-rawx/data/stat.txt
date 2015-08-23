@@ -1,0 +1,38 @@
+GET /stat HTTP/1.1
+Keep-Alive:
+Connection: TE, Keep-Alive
+TE: trailers
+Host: 127.0.0.1:6113
+
+HTTP/1.1 200 OK
+Date: Wed, 28 May 2014 16:21:44 GMT
+Server: Apache
+Content-Length: 453
+Keep-Alive: timeout=5, max=100
+Connection: Keep-Alive
+Content-Type: text/plain
+
+rawx.req.all 2405
+rawx.req.put 0
+rawx.req.get 0
+rawx.req.del 0
+rawx.req.stat 2405
+rawx.req.info 0
+rawx.req.raw 0
+rawx.req.other 0
+rawx.rep.2xx 2405
+rawx.rep.4xx 0
+rawx.rep.5xx 0
+rawx.rep.other 0
+rawx.rep.403 0
+rawx.rep.404 0
+rawx.rep.bread 0
+rawx.rep.bwritten 0
+rawx.reqpersec 1073741823.000000
+rawx.avreqtime 0
+rawx.reqputpersec 0.000000
+rawx.avputreqtime 0
+rawx.reqgetpersec 0.000000
+rawx.avgetreqtime 0
+rawx.reqdelpersec 0.000000
+rawx.avdelreqtime 0

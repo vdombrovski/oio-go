@@ -1,0 +1,43 @@
+PUT /DATA/NS1/localhost/rawx-1/F48E44EBF4BFFFA068E8CDF16A44419F51327481EBD2770EB6A8A8EF24BC846C HTTP/1.1
+Keep-Alive:
+Connection: TE, Keep-Alive
+TE: trailers
+Host: 127.0.0.1:6113
+containerid: C3F36084054557E6DBA6F001C41DAFBFEF50FCC83DB2B3F782AE414A07BB3A7A
+contentpath: plop
+chunkpos: 0
+chunknb: 1
+chunksize: 0
+contentsize: 0
+GSReqId: E77B000096F2BD2B43F723621CF3A91100000000
+contentmetadata-sys: mime-type=octet/stream;chunk-method=chunk-size;creation-date=1401294374;storage-policy=none
+chunkid: F48E44EBF4BFFFA068E8CDF16A44419F51327481EBD2770EB6A8A8EF24BC846C
+Content-Length: 0
+
+HTTP/1.1 201 Created
+Date: Wed, 28 May 2014 16:26:14 GMT
+Server: Apache
+content_path: plop
+content_size: 0
+content_chunksnb: 1
+content_metadata-sys: mime-type=octet/stream;chunk-method=chunk-size;creation-date=1401294374;storage-policy=none
+content_containerid: C3F36084054557E6DBA6F001C41DAFBFEF50FCC83DB2B3F782AE414A07BB3A7A
+chunk_id: F48E44EBF4BFFFA068E8CDF16A44419F51327481EBD2770EB6A8A8EF24BC846C
+chunk_path: plop
+chunk_size: 0
+chunk_hash: D41D8CD98F00B204E9800998ECF8427E
+chunk_position: 0
+chunk_containerid: C3F36084054557E6DBA6F001C41DAFBFEF50FCC83DB2B3F782AE414A07BB3A7A
+Location: http://127.0.0.1:6113/DATA/NS1/localhost/rawx-1/F48E44EBF4BFFFA068E8CDF16A44419F51327481EBD2770EB6A8A8EF24BC846C
+Content-Length: 263
+Keep-Alive: timeout=5, max=100
+Connection: Keep-Alive
+Content-Type: text/html; charset=ISO-8859-1
+
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
+<html><head>
+<title>201 Created</title>
+</head><body>
+<h1>Created</h1>
+<p>Resource /DATA/NS1/localhost/rawx-1/F48E44EBF4BFFFA068E8CDF16A44419F51327481EBD2770EB6A8A8EF24BC846C has been created.</p>
+</body></html>
