@@ -1,0 +1,33 @@
+GET /DATA/NS1/localhost/rawx-1/EE87FBF4A002DB4200302DF24B29943F37DD650BA62A682517DB12623B329E49 HTTP/1.1
+Keep-Alive:
+Connection: TE, Keep-Alive
+TE: trailers
+Host: 127.0.0.1:6113
+GSReqId: F07B00002877975E143D340EE992FB1C00000000
+containerid: C3F36084054557E6DBA6F001C41DAFBFEF50FCC83DB2B3F782AE414A07BB3A7A
+Range: bytes=0-4
+
+HTTP/1.1 206 Partial Content
+Date: Wed, 28 May 2014 16:30:00 GMT
+Server: Apache
+Last-Modified: Wed, 28 May 2014 16:29:57 GMT
+ETag: "4fa7852b759c1"
+Accept-Ranges: bytes
+Content-Length: 5
+chunk_id: EE87FBF4A002DB4200302DF24B29943F37DD650BA62A682517DB12623B329E49
+chunk_path: plop
+chunk_size: 5
+chunk_hash: AA1B8DB21157FAE46B72E8731F4023DA
+chunk_position: 0
+chunk_containerid: C3F36084054557E6DBA6F001C41DAFBFEF50FCC83DB2B3F782AE414A07BB3A7A
+content_path: plop
+content_size: 5
+content_chunksnb: 1
+content_metadata-sys: mime-type=octet/stream;chunk-method=chunk-size;creation-date=1401294597;storage-policy=none
+content_containerid: C3F36084054557E6DBA6F001C41DAFBFEF50FCC83DB2B3F782AE414A07BB3A7A
+Content-Range: bytes 0-4/5
+Keep-Alive: timeout=5, max=100
+Connection: Keep-Alive
+Content-Type: text/plain
+
+plop
