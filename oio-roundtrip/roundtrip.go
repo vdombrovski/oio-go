@@ -20,9 +20,9 @@ package main
 
 import (
 	"bytes"
+	"flag"
 	"github.com/jfsmig/oio-go/sdk"
 	"io"
-	"flag"
 	"log"
 	"math/rand"
 	"strconv"
@@ -56,7 +56,7 @@ func main() {
 		log.Fatal("Namespace is not set")
 	}
 
-	name := oio.FlatName{ N: ns, A: acct, U: user, P:path }
+	name := oio.FlatName{N: ns, A: acct, U: user, P: path}
 
 	cfg := oio.MakeStaticConfig()
 	cfg.Set(ns, "proxy", "127.0.0.1:6002")
@@ -91,7 +91,7 @@ func main() {
 		if err != nil {
 			log.Fatal("DeleteUser() error: ", err)
 		} else {
-				log.Println("User deleted")
+			log.Println("User deleted")
 		}
 	}
 
@@ -150,7 +150,7 @@ func main() {
 					log.Fatal("GetContent() consumer error: ", err)
 				}
 			}
-			log.Println("Content downloaded (", total," bytes)")
+			log.Println("Content downloaded (", total, " bytes)")
 			dl.Close()
 		}
 	}

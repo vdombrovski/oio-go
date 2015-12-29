@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 )
@@ -60,22 +61,25 @@ func (cli *containerClient) actionFlags(force bool) string {
 	return strings.Join(tokens, ", ")
 }
 
-func (cli *containerClient) getRefUrl(n UserName) string {
-	return fmt.Sprintf("http://%s/v2.0/m2/%s/%s/%s", getProxyContainerUrl(cli.ns, cli.config),
-		cli.ns, n.Account(), n.User())
+func (cli *containerClient) getRefUrl(n UserName, action string) string {
+	return fmt.Sprintf("http://%s/v3.0/%s/container/%s?acct=%s&ref=%s",
+		getProxyContainerUrl(cli.ns, cli.config),
+		cli.ns, action,
+		url.QueryEscape(n.Account()), url.QueryEscape(n.User()))
 }
 
-func (cli *containerClient) getContentUrl(n ObjectName) string {
-	u := cli.getRefUrl(n)
-	return u + "/" + n.Path()
+func (cli *containerClient) getContentUrl(n ObjectName, action string) string {
+	return fmt.Sprintf("http://%s/v3.0/%s/content/%s?acct=%s&ref=%s&path=%s",
+		getProxyContainerUrl(cli.ns, cli.config),
+		cli.ns, action,
+		url.QueryEscape(n.Account()), url.QueryEscape(n.User()), url.QueryEscape(n.Path()))
 }
 
 func (cli *containerClient) CreateContainer(n ContainerName) (bool, error) {
 	if n.NS() != cli.ns {
 		return false, ErrorNsNotManaged
 	}
-	url := cli.getRefUrl(n)
-	req, _ := http.NewRequest("PUT", url, nil)
+	req, _ := http.NewRequest("POST", cli.getRefUrl(n, "create"), nil)
 	req.Header.Set("X-oio-action-mode", cli.actionFlags(false))
 	return cli.simpleRequest(req)
 }
@@ -84,8 +88,8 @@ func (cli *containerClient) DeleteContainer(n ContainerName) (bool, error) {
 	if n.NS() != cli.ns {
 		return false, ErrorNsNotManaged
 	}
-	url := cli.getRefUrl(n)
-	req, _ := http.NewRequest("DELETE", url, nil)
+	req, _ := http.NewRequest("POST", cli.getRefUrl(n, "destroy"), nil)
+	req.Header.Set("X-oio-action-mode", cli.actionFlags(false))
 	return cli.simpleRequest(req)
 }
 
@@ -93,8 +97,7 @@ func (cli *containerClient) HasContainer(n ContainerName) (bool, error) {
 	if n.NS() != cli.ns {
 		return false, ErrorNsNotManaged
 	}
-	url := cli.getRefUrl(n)
-	req, _ := http.NewRequest("HEAD", url, nil)
+	req, _ := http.NewRequest("GET", cli.getRefUrl(n, "show"), nil)
 	ok, err := cli.simpleRequest(req)
 	if err == ErrorNotFound {
 		return false, nil
@@ -107,8 +110,7 @@ func (cli *containerClient) ListContents(n ContainerName) (ContainerListing, err
 		var out ContainerListing
 		return out, ErrorNsNotManaged
 	}
-	url := cli.getRefUrl(n)
-	req, _ := http.NewRequest("GET", url, nil)
+	req, _ := http.NewRequest("GET", cli.getRefUrl(n, "list"), nil)
 	out := ContainerListing{Objects: make([]Content, 0), Properties: make([]Property, 0)}
 
 	p := makeHttpClient(cli.ns, cli.config)
@@ -138,8 +140,7 @@ func (cli *containerClient) GetContent(n ObjectName) ([]Chunk, []Property, error
 	if n.NS() != cli.ns {
 		return chunks, props, ErrorNsNotManaged
 	}
-	url := cli.getContentUrl(n)
-	req, _ := http.NewRequest("GET", url, nil)
+	req, _ := http.NewRequest("GET", cli.getContentUrl(n, "show"), nil)
 
 	p := makeHttpClient(cli.ns, cli.config)
 	rep, err := p.Do(req)
@@ -165,13 +166,11 @@ func (cli *containerClient) GenerateContent(n ObjectName, size uint64) ([]Chunk,
 	if n.NS() != cli.ns {
 		return nil, ErrorNsNotManaged
 	}
-	url := cli.getContentUrl(n)
 
 	args := map[string]string{"policy": "", "size": strconv.FormatUint(size, 10)}
 	encoded, _ := json.Marshal(args)
-	body := fmt.Sprintf("{\"action\":\"Beans\",\"args\":%s}", string(encoded))
-
-	req, _ := http.NewRequest("POST", url+"/action", strings.NewReader(body))
+	req, _ := http.NewRequest("POST", cli.getContentUrl(n, "prepare"),
+		bytes.NewBuffer(encoded))
 	req.Header.Set("X-oio-action-mode", cli.actionFlags(false))
 
 	chunks := make([]Chunk, 0)
@@ -200,11 +199,10 @@ func (cli *containerClient) PutContent(n ObjectName, size uint64, chunks []Chunk
 	if n.NS() != cli.ns {
 		return ErrorNsNotManaged
 	}
-	url := cli.getContentUrl(n)
 
 	body, _ := json.Marshal(chunks)
-
-	req, _ := http.NewRequest("PUT", url, bytes.NewBuffer(body))
+	req, _ := http.NewRequest("POST", cli.getContentUrl(n, "create"),
+		bytes.NewBuffer(body))
 	req.Header.Set("X-oio-action-mode", cli.actionFlags(false))
 	req.Header.Set("X-oio-content-meta-length", strconv.FormatUint(size, 10))
 
@@ -230,8 +228,7 @@ func (cli *containerClient) DeleteContent(n ObjectName) (bool, error) {
 	if n.NS() != cli.ns {
 		return false, ErrorNsNotManaged
 	}
-	url := cli.getContentUrl(n)
-	req, _ := http.NewRequest("DELETE", url, nil)
+	req, _ := http.NewRequest("POST", cli.getContentUrl(n, "delete"), nil)
 
 	p := makeHttpClient(cli.ns, cli.config)
 	rep, err := p.Do(req)

@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -99,20 +100,24 @@ func (cli *directoryClient) simpleRequest(req *http.Request) (bool, error) {
 	}
 }
 
-func (cli *directoryClient) getRefUrl(n UserName) string {
-	return fmt.Sprintf("http://%s/v2.0/dir/%s/%s/%s", getProxyDirectoryUrl(cli.ns, cli.config), cli.ns, n.Account(), n.User())
+func (cli *directoryClient) getRefUrl(n UserName, action string) string {
+	return fmt.Sprintf("http://%s/v3.0/%s/reference/%s?acct=%s&ref=%s",
+		getProxyDirectoryUrl(cli.ns, cli.config), cli.ns, action,
+		url.QueryEscape(n.Account()), url.QueryEscape(n.User()))
 }
 
-func (cli *directoryClient) getTypeUrl(n UserName, srvtype string) string {
-	return fmt.Sprintf("http://%s/v2.0/dir/%s/%s/%s/%s", getProxyDirectoryUrl(cli.ns, cli.config), cli.ns, n.Account(), n.User(), srvtype)
+func (cli *directoryClient) getTypeUrl(n UserName, action, srvtype string) string {
+	return fmt.Sprintf("http://%s/v3.0/%s/reference/%s?acct=%s&ref=%s&type=%s",
+		getProxyDirectoryUrl(cli.ns, cli.config), cli.ns, action,
+		url.QueryEscape(n.Account()), url.QueryEscape(n.User()),
+		url.QueryEscape(srvtype))
 }
 
 func (cli *directoryClient) HasUser(n UserName) (bool, error) {
 	if n.NS() != cli.ns {
 		return false, ErrorNsNotManaged
 	}
-	url := cli.getRefUrl(n)
-	req, _ := http.NewRequest("HEAD", url, nil)
+	req, _ := http.NewRequest("GET", cli.getRefUrl(n, "show"), nil)
 	ok, err := cli.simpleRequest(req)
 	if err == ErrorNotFound {
 		return false, nil
@@ -124,8 +129,7 @@ func (cli *directoryClient) CreateUser(n UserName) (bool, error) {
 	if n.NS() != cli.ns {
 		return false, ErrorNsNotManaged
 	}
-	url := cli.getRefUrl(n)
-	req, _ := http.NewRequest("PUT", url, nil)
+	req, _ := http.NewRequest("POST", cli.getRefUrl(n, "create"), nil)
 	req.Header.Set("X-oio-action-mode", cli.actionFlags(false))
 	return cli.simpleRequest(req)
 }
@@ -134,8 +138,7 @@ func (cli *directoryClient) DeleteUser(n UserName) (bool, error) {
 	if n.NS() != cli.ns {
 		return false, ErrorNsNotManaged
 	}
-	url := cli.getRefUrl(n)
-	req, _ := http.NewRequest("DELETE", url, nil)
+	req, _ := http.NewRequest("POST", cli.getRefUrl(n, "destroy"), nil)
 	return cli.simpleRequest(req)
 }
 
@@ -144,8 +147,8 @@ func (cli *directoryClient) DumpUser(n UserName) (RefDump, error) {
 	if n.NS() != cli.ns {
 		return tmp, ErrorNsNotManaged
 	}
-	url := cli.getRefUrl(n)
-	req, _ := http.NewRequest("GET", url, nil)
+
+	req, _ := http.NewRequest("GET", cli.getRefUrl(n, "show"), nil)
 
 	p := makeHttpClient(cli.ns, cli.config)
 	rep, err := p.Do(req)
@@ -171,8 +174,7 @@ func (cli *directoryClient) ListServices(n UserName, srvtype string) ([]Service,
 	if n.NS() != cli.ns {
 		return make([]Service, 0), ErrorNsNotManaged
 	}
-	url := cli.getTypeUrl(n, srvtype)
-	req, _ := http.NewRequest("GET", url, nil)
+	req, _ := http.NewRequest("GET", cli.getTypeUrl(n, "show", srvtype), nil)
 	return cli.serviceRequest(req)
 }
 
@@ -180,8 +182,8 @@ func (cli *directoryClient) LinkServices(n UserName, srvtype string) ([]Service,
 	if n.NS() != cli.ns {
 		return make([]Service, 0), ErrorNsNotManaged
 	}
-	url := cli.getTypeUrl(n, srvtype)
-	req, _ := http.NewRequest("POST", url+"/action", strings.NewReader("{\"action\":\"Link\",\"args\":null}"))
+	req, _ := http.NewRequest("POST", cli.getTypeUrl(n, "link", srvtype),
+		strings.NewReader("{\"action\":\"Link\",\"args\":null}"))
 	req.Header.Set("X-oio-action-mode", cli.actionFlags(false))
 	return cli.serviceRequest(req)
 }
@@ -190,8 +192,8 @@ func (cli *directoryClient) RenewServices(n UserName, srvtype string) ([]Service
 	if n.NS() != cli.ns {
 		return make([]Service, 0), ErrorNsNotManaged
 	}
-	url := cli.getTypeUrl(n, srvtype)
-	req, _ := http.NewRequest("POST", url+"/action", strings.NewReader("{\"action\":\"Renew\",\"args\":null}"))
+	req, _ := http.NewRequest("POST", cli.getTypeUrl(n, "renew", srvtype),
+		strings.NewReader("{\"action\":\"Renew\",\"args\":null}"))
 	req.Header.Set("X-oio-action-mode", cli.actionFlags(false))
 	return cli.serviceRequest(req)
 }
@@ -201,9 +203,9 @@ func (cli *directoryClient) ForceServices(n UserName, srv []Service) ([]Service,
 		return make([]Service, 0), ErrorNsNotManaged
 	}
 	var srvtype string = srv[0].Type
-	url := cli.getTypeUrl(n, srvtype)
 	body, _ := json.Marshal(srv)
-	req, _ := http.NewRequest("POST", url+"/action", bytes.NewBuffer(body))
+	req, _ := http.NewRequest("POST", cli.getTypeUrl(n, "force", srvtype),
+		bytes.NewBuffer(body))
 	req.Header.Set("X-oio-action-mode", cli.actionFlags(false))
 	return cli.serviceRequest(req)
 }
@@ -212,8 +214,7 @@ func (cli *directoryClient) UnlinkServices(n UserName, srvtype string) (bool, er
 	if n.NS() != cli.ns {
 		return false, ErrorNsNotManaged
 	}
-	url := cli.getTypeUrl(n, srvtype)
-	req, _ := http.NewRequest("DELETE", url, nil)
+	req, _ := http.NewRequest("POST", cli.getTypeUrl(n, "unlink", srvtype), nil)
 	return cli.simpleRequest(req)
 }
 
@@ -221,8 +222,7 @@ func (cli *directoryClient) GetAllProperties(n UserName) (map[string]string, err
 	if n.NS() != cli.ns {
 		return make(map[string]string), ErrorNsNotManaged
 	}
-	url := cli.getRefUrl(n)
-	req, _ := http.NewRequest("POST", url+"/action", strings.NewReader("{\"action\":\"GetProperties\",\"args\":null}"))
+	req, _ := http.NewRequest("POST", cli.getRefUrl(n, "get_properties"), nil)
 	var tab map[string]string = make(map[string]string)
 
 	p := makeHttpClient(cli.ns, cli.config)
@@ -249,10 +249,9 @@ func (cli *directoryClient) SetProperties(n UserName, props map[string]string) (
 	if n.NS() != cli.ns {
 		return false, ErrorNsNotManaged
 	}
-	url := cli.getRefUrl(n)
-	encoded, _ := json.Marshal(props)
-	body := fmt.Sprintf("{\"action\":\"SetProperties\",\"args\":%s}", string(encoded))
-	req, _ := http.NewRequest("POST", url+"/action", strings.NewReader(body))
+	body, _ := json.Marshal(props)
+	req, _ := http.NewRequest("POST", cli.getRefUrl(n, "set_properties"),
+		bytes.NewBuffer(body))
 	return cli.simpleRequest(req)
 }
 
@@ -260,9 +259,8 @@ func (cli *directoryClient) DeleteProperties(n UserName, keys []string) (bool, e
 	if n.NS() != cli.ns {
 		return false, ErrorNsNotManaged
 	}
-	url := cli.getRefUrl(n)
-	encoded, _ := json.Marshal(keys)
-	body := fmt.Sprintf("{\"action\":\"DeleteProperties\",\"args\":%s}", string(encoded))
-	req, _ := http.NewRequest("POST", url+"/action", strings.NewReader(body))
+	body, _ := json.Marshal(keys)
+	req, _ := http.NewRequest("POST", cli.getRefUrl(n, "del_properties"),
+		bytes.NewBuffer(body))
 	return cli.simpleRequest(req)
 }
