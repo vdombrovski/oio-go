@@ -144,6 +144,9 @@ type Config interface {
 
 	// Wrap GetString() and checks the value represents a boolean
 	GetBool(ns, key string) (bool, error)
+
+	// Wrap GetString() and checks the value represents an integer
+	GetInt(ns, key string) (int64, error)
 }
 
 // A service item managed by the OpenIO SDS's directory services.

@@ -1,6 +1,6 @@
 /*
 OpenIO SDS Go client SDK
-Copyright (C) 2015 OpenIO
+Copyright (C) 2015-2017 OpenIO
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -21,7 +21,7 @@ package main
 import (
 	"bytes"
 	"flag"
-	"github.com/jfsmig/oio-go/sdk"
+	oio "github.com/jfsmig/oio-go/sdk"
 	"io"
 	"log"
 	"math/rand"

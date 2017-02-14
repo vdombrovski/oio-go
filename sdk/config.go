@@ -17,6 +17,12 @@
 package oio
 
 import (
+	"errors"
+	"github.com/go-ini/ini"
+	"io/ioutil"
+	"log"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -26,6 +32,35 @@ import (
 // in the namespace names to work properly.
 type StaticConfig struct {
 	pairs map[string]string
+}
+
+// Returns the list of namespaces known in the (loaded) configuration
+func (cfg *StaticConfig) Namespaces() []string {
+	tmp := make(map[string]bool)
+	for k,_ := range cfg.pairs {
+		if idx := strings.Index(k, "/"); idx > 0 {
+			tmp[k[:idx]] = true
+		}
+	}
+	out := make([]string,0)
+	for k,_ := range tmp {
+		out = append(out, k)
+	}
+	return out
+}
+
+// Returns all the keys known for the given namespace in the (loaded)
+// configuration
+func (cfg *StaticConfig) Keys(ns string) []string {
+	out := make([]string,0)
+	for k,_ := range cfg.pairs {
+		if idx := strings.Index(k, "/"); idx > 0 {
+			if k[:idx] == ns {
+				out = append(out,k[idx+1:])
+			}
+		}
+	}
+	return out
 }
 
 // Sets a configuration key for the given namespace
@@ -51,6 +86,71 @@ func (cfg *StaticConfig) GetBool(ns, key string) (bool, error) {
 		return false, err
 	}
 	return strconv.ParseBool(s)
+}
+
+func (cfg *StaticConfig) GetInt(ns, key string) (int64, error) {
+	s, err := cfg.GetString(ns, key)
+	if err != nil {
+		return 0, err
+	}
+	return strconv.ParseInt(s, 10, 64)
+}
+
+// Build an empty StaticConfig
+func MakeStaticConfig() *StaticConfig {
+	cfg := new(StaticConfig)
+	cfg.pairs = make(map[string]string)
+	return cfg
+}
+
+func (cfg *StaticConfig) LoadWithContent(content []byte) error {
+	kvf, err := ini.Load(content)
+	if err != nil {
+		return err
+	}
+	for _, section := range kvf.Sections() {
+		for _, key := range section.Keys() {
+			cfg.pairs[section.Name() + "/" + key.Name()] = key.Value()
+		}
+	}
+	return nil
+}
+
+// Loads the given StaticConfig with the content of the given file
+func (cfg *StaticConfig) LoadWithFile(path string) error {
+	content, err := ioutil.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	return cfg.LoadWithContent(content)
+}
+
+// Loads the given StaticConfig with the system-wide configuration
+func (cfg *StaticConfig) LoadWithSystem() error {
+	var err error
+	err = cfg.LoadWithFile("/etc/oio/sds.conf")
+	if err != nil {
+		return err
+	}
+
+	files, _ := filepath.Glob("/etc/oio/sds.conf.d/*.conf")
+	for _, file := range files {
+		if err = cfg.LoadWithFile(file); err != nil {
+			log.Println("StaticConfig: Failed to load [%s]", file)
+		}
+	}
+
+	return nil
+}
+
+// Loads the given StaticConfig with the configuration in the homedir of
+// the user.
+func (cfg *StaticConfig) LoadWithLocal() error {
+	if home, ok := os.LookupEnv("HOME"); !ok {
+		return errors.New("No HOME in ENV")
+	} else {
+		return cfg.LoadWithFile(home + "/.oio/sds.conf")
+	}
 }
 
 func getProxyUrl(ns string, cfg Config) string {
@@ -83,10 +183,4 @@ func getProxyDirectoryUrl(ns string, cfg Config) string {
 		return getProxyUrl(ns, cfg)
 	}
 	return u
-}
-
-func MakeStaticConfig() *StaticConfig {
-	cfg := new(StaticConfig)
-	cfg.pairs = make(map[string]string)
-	return cfg
 }

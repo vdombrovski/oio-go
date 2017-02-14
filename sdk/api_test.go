@@ -1,5 +1,5 @@
 // OpenIO SDS Go client SDK
-// Copyright (C) 2015 OpenIO
+// Copyright (C) 2015-2017 OpenIO
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public
@@ -18,7 +18,6 @@ package oio
 
 import (
 	"encoding/hex"
-	"log"
 	"strings"
 	"testing"
 )
@@ -28,6 +27,6 @@ func TestHash(t *testing.T) {
 	var hexa string = hex.EncodeToString(ComputeUserId(&n))
 	hexa = strings.ToUpper(hexa)
 	if hexa != "C3F36084054557E6DBA6F001C41DAFBFEF50FCC83DB2B3F782AE414A07BB3A7A" {
-		log.Fatal("ID mismatch")
+		t.Fatal("ID mismatch")
 	}
 }
