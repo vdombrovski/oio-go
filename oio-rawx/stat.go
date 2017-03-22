@@ -5,12 +5,12 @@ import (
 )
 
 const (
-	Unexpected = iota
+	Unexpected       = iota
 	StatSlotGetStats = iota
-	StatSlotPut = iota
-	StatSlotGet = iota
-	StatSlotDel = iota
-	LastStat = iota
+	StatSlotPut      = iota
+	StatSlotGet      = iota
+	StatSlotDel      = iota
+	LastStat         = iota
 )
 
 var names = [LastStat]string{
@@ -22,23 +22,23 @@ var names = [LastStat]string{
 }
 
 type StatSet struct {
-	lock sync.RWMutex
+	lock   sync.RWMutex
 	values [LastStat]uint64
 }
 
 var counters, timers StatSet
 
-func (ss *StatSet) Increment (which int) {
+func (ss *StatSet) Increment(which int) {
 	ss.lock.Lock()
 	defer ss.lock.Unlock()
 
 	if which < 0 || which >= LastStat {
 		panic("BUG: stat does not exist")
 	}
-	ss.values[which] ++
+	ss.values[which]++
 }
 
-func (ss *StatSet) Addcount (which int, inc uint64) {
+func (ss *StatSet) Addcount(which int, inc uint64) {
 	ss.lock.Lock()
 	defer ss.lock.Unlock()
 
@@ -48,7 +48,7 @@ func (ss *StatSet) Addcount (which int, inc uint64) {
 	ss.values[which] += inc
 }
 
-func (ss *StatSet) Get () [LastStat]uint64 {
+func (ss *StatSet) Get() [LastStat]uint64 {
 	ss.lock.RLock()
 	defer ss.lock.RUnlock()
 
@@ -56,4 +56,3 @@ func (ss *StatSet) Get () [LastStat]uint64 {
 	tab = ss.values
 	return tab
 }
-

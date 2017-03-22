@@ -48,7 +48,7 @@ func TestConfig_LoadValidContent(t *testing.T) {
 		t.Fatal("LoadWithContent failed: ", err)
 	}
 	value = "127.0.0.1:6000"
-	if err = cfg.LoadWithContent([]byte("[plop]\nzookeeper="+value)); err != nil {
+	if err = cfg.LoadWithContent([]byte("[plop]\nzookeeper=" + value)); err != nil {
 		t.Fatal("LoadWithContent failed: ", err)
 	}
 	if str, err = cfg.GetString("plop", "zookeeper"); err != nil {

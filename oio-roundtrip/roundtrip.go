@@ -23,8 +23,8 @@ import (
 	"flag"
 	oio "github.com/jfsmig/oio-go/sdk"
 	"io"
-	"os"
 	"log"
+	"os"
 )
 
 func main() {

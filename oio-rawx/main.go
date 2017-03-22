@@ -75,7 +75,7 @@ func main() {
 	filerepo := MakeFileRepository(basedir, nil)
 	chunkrepo := MakeChunkRepository(filerepo)
 	if err := chunkrepo.Lock(ns, ipPort); err != nil {
-		usage("Basedir cannot be locked with xattr : "+err.Error())
+		usage("Basedir cannot be locked with xattr : " + err.Error())
 	}
 
 	rawx := &rawxService{ns, ipPort, chunkrepo, false}

@@ -188,16 +188,16 @@ type Chunk struct {
 
 // A ContentHeader represents the minimal information stored in a container about a stored object.
 type ContentHeader struct {
-	Name           string `json:"name"`
-	Id             string `json:"id"`
-	Version        uint64 `json:"ver"`
-	Size           uint64 `json:"size"`
-	CTime          uint64 `json:"ctime"`
-	Deleted        bool   `json:"deleted,omitempty"`
-	Hash           string `json:"hash"`
-	Policy         string `json:"policy"`
-	ChunkMethod    string `json:"chunk_method"`
-	MimeType       string `json:"mime_type"`
+	Name        string `json:"name"`
+	Id          string `json:"id"`
+	Version     uint64 `json:"ver"`
+	Size        uint64 `json:"size"`
+	CTime       uint64 `json:"ctime"`
+	Deleted     bool   `json:"deleted,omitempty"`
+	Hash        string `json:"hash"`
+	Policy      string `json:"policy"`
+	ChunkMethod string `json:"chunk_method"`
+	MimeType    string `json:"mime_type"`
 }
 
 type Content struct {
@@ -364,4 +364,3 @@ func MakeContainerClient(ns string, cfg Config) (Container, error) {
 	out := &containerClient{ns: ns, config: cfg}
 	return out, nil
 }
-

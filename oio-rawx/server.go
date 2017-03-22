@@ -45,14 +45,14 @@ func setError(rep http.ResponseWriter, e error) {
 }
 
 type rawxService struct {
-	ns   string
-	url  string
-	repo Repository
+	ns       string
+	url      string
+	repo     Repository
 	compress bool
 }
 
 type attrMapping struct {
-	attr string
+	attr   string
 	header string
 }
 
@@ -60,12 +60,12 @@ const bufSize = 16384
 
 var (
 	HeaderPrefix string = "X-Oio-"
-	AttrPrefix = "user.grid."
+	AttrPrefix          = "user.grid."
 )
 
 var (
 	AttrNameCompression = "compression"
-	AttrNameChecksum = "chunk.hash"
+	AttrNameChecksum    = "chunk.hash"
 )
 
 var (
@@ -74,30 +74,30 @@ var (
 
 var (
 	ErrCompressionNotManaged = errors.New("Compression mode not managed")
-	ErrMissingHeader = errors.New("Missing mandatory header")
-	ErrMd5Mismatch = errors.New("MD5 sum mismatch")
+	ErrMissingHeader         = errors.New("Missing mandatory header")
+	ErrMd5Mismatch           = errors.New("MD5 sum mismatch")
 )
 
 var AttrMap []attrMapping = []attrMapping{
-	{"container.id",           "Chunk-Meta-Container-Id"},
-	{"content.path",           "Chunk-Meta-Content-Path"},
-	{"content.id",             "Chunk-Meta-Content-Id"},
-	{"content.ver",            "Chunk-Meta-Content-Version"},
-	{"content.size",           "Chunk-Meta-Content-Size"},
-	{"content.nbchunk",        "Chunk-Meta-Content-Chunknb"},
+	{"container.id", "Chunk-Meta-Container-Id"},
+	{"content.path", "Chunk-Meta-Content-Path"},
+	{"content.id", "Chunk-Meta-Content-Id"},
+	{"content.ver", "Chunk-Meta-Content-Version"},
+	{"content.size", "Chunk-Meta-Content-Size"},
+	{"content.nbchunk", "Chunk-Meta-Content-Chunknb"},
 	{"content.storage_policy", "Chunk-Meta-Content-Storage-Policy"},
-	{"content.mime_type",      "Chunk-Meta-Content-Mime-Type"},
-	{"content.chunk_method",   "Chunk-Meta-Content-Chunk-Method"},
-	{"chunk.id",               "Chunk-Meta-Chunk-Id"},
-	{"chunk.size",             "Chunk-Meta-Chunk-Size"},
-	{"chunk.position",         "Chunk-Meta-Chunk-Pos"},
-	{"chunk.hash",             "Chunk-Meta-Chunk-Pos"},
+	{"content.mime_type", "Chunk-Meta-Content-Mime-Type"},
+	{"content.chunk_method", "Chunk-Meta-Content-Chunk-Method"},
+	{"chunk.id", "Chunk-Meta-Chunk-Id"},
+	{"chunk.size", "Chunk-Meta-Chunk-Size"},
+	{"chunk.position", "Chunk-Meta-Chunk-Pos"},
+	{"chunk.hash", "Chunk-Meta-Chunk-Pos"},
 }
 
 type upload struct {
-	in io.Reader
+	in     io.Reader
 	length int64
-	h string
+	h      string
 }
 
 func putData(out io.Writer, ul *upload) error {
@@ -120,7 +120,7 @@ func putData(out io.Writer, ul *upload) error {
 		}
 	}
 
-	sum := chunkHash.Sum(make([]byte,0))
+	sum := chunkHash.Sum(make([]byte, 0))
 	ul.h = strings.ToUpper(hex.EncodeToString(sum))
 	return nil
 }
@@ -146,7 +146,7 @@ func putFinish(out FileWriter, req *http.Request, h string) error {
 	}
 
 	// Set the MD5
-	out.SetAttr(AttrPrefix + AttrNameChecksum, []byte(h))
+	out.SetAttr(AttrPrefix+AttrNameChecksum, []byte(h))
 
 	return nil
 }
@@ -183,7 +183,7 @@ func (self *rawxService) doPut(rep http.ResponseWriter, req *http.Request) {
 		err = putData(out, &ul)
 	}
 
-	// Finish with the XATTR management 
+	// Finish with the XATTR management
 	if err != nil {
 		err = putFinish(out, req, ul.h)
 	}
@@ -205,7 +205,7 @@ func (self *rawxService) doGetStats(rep http.ResponseWriter, req *http.Request) 
 	allTimers := timers.Get()
 
 	rep.WriteHeader(200)
-	for i,n := range names {
+	for i, n := range names {
 		rep.Write([]byte(fmt.Sprintf("timer.%s %v", n, allTimers[i])))
 		rep.Write([]byte(fmt.Sprintf("counter.%s %v", n, allCounters[i])))
 	}
@@ -306,4 +306,3 @@ func (self *rawxService) ServeHTTP(rep http.ResponseWriter, req *http.Request) {
 	counters.Increment(which)
 	log.Println("ACCESS", req)
 }
-

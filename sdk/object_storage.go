@@ -25,8 +25,8 @@ import (
 )
 
 var (
-	errNoContentId = errors.New("Missing Content-Id")
-	errInvalidVersion = errors.New("No version received from the proxy")
+	errNoContentId      = errors.New("Missing Content-Id")
+	errInvalidVersion   = errors.New("No version received from the proxy")
 	errECNotImplemented = errors.New("EC Not implemented")
 )
 
@@ -47,7 +47,7 @@ func (cli *objectStorageClient) GetContent(n ObjectName) (io.ReadCloser, error) 
 	}
 
 	// Only consider the HTTP locations, no other tier is managed yet
-	rawx_chunks := make([]Chunk,0)
+	rawx_chunks := make([]Chunk, 0)
 	for _, chunk := range content.Chunks {
 		if strings.HasPrefix(chunk.Url, "http://") {
 			rawx_chunks = append(rawx_chunks, chunk)
@@ -62,7 +62,6 @@ func (cli *objectStorageClient) PutContent(n ObjectName, size uint64, auto bool,
 	if src == nil {
 		panic("Invalid input")
 	}
-
 
 	var err error
 

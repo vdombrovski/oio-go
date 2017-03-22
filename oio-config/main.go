@@ -19,9 +19,9 @@ License along with this library.
 package main
 
 import (
+	"fmt"
 	oio "github.com/jfsmig/oio-go/sdk"
 	"log"
-	"fmt"
 )
 
 func main() {

@@ -73,15 +73,14 @@ func MakeFileRepository(root string, notifier Notifier) *FileRepository {
 	return r
 }
 
-
-func setOrHasXattr (path,n,v string) error {
+func setOrHasXattr(path, n, v string) error {
 	if err := syscall.Setxattr(path, n, []byte(v), 1); err == nil {
 		return nil
 	} else if !os.IsExist(err) {
 		return err
 	}
-	tab := make([]byte,256)
-	sz,err := syscall.Getxattr(path, n, tab)
+	tab := make([]byte, 256)
+	sz, err := syscall.Getxattr(path, n, tab)
 	if err != nil {
 		return err
 	}

@@ -84,7 +84,7 @@ func (cli *containerClient) CreateContainer(n ContainerName, auto bool) (bool, e
 		return false, ErrorNsNotManaged
 	}
 	req, _ := http.NewRequest("POST", cli.getRefUrl(n, "create"),
-			bytes.NewBuffer([]byte("{}")))
+		bytes.NewBuffer([]byte("{}")))
 	req.Header.Set("X-oio-action-mode", cli.autocreateFlag(auto))
 	return cli.simpleRequest(req)
 }
@@ -116,7 +116,7 @@ func (cli *containerClient) ListContents(n ContainerName) (ContainerListing, err
 	}
 	req, _ := http.NewRequest("GET", cli.getRefUrl(n, "list"), nil)
 	out := ContainerListing{
-		Objects: make([]ContentHeader, 0),
+		Objects:    make([]ContentHeader, 0),
 		Properties: make([]Property, 0),
 	}
 
@@ -216,12 +216,11 @@ func (cli *containerClient) GenerateContent(n ObjectName, size uint64, auto bool
 	return content, err
 }
 
-
 // Implements an ObjectName
 
 func (cli *containerClient) PutContent(container ContainerName, content Content, auto bool) error {
 
-	fqc := fullyQualifiedContent{content:&content, container:container}
+	fqc := fullyQualifiedContent{content: &content, container: container}
 
 	body, _ := json.Marshal(content.Chunks)
 	req, _ := http.NewRequest("POST", cli.getContentUrl(&fqc, "create"),

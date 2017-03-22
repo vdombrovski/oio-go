@@ -79,9 +79,9 @@ func (pp *polyPut) do(src polyPutSource) error {
 	// create sub requests
 	for _, url := range pp.urls {
 		sub := &subReq{
-			req: nil,
-			err: nil,
-			wg: &wg,
+			req:   nil,
+			err:   nil,
+			wg:    &wg,
 			input: make(chan []byte, 8),
 			ready: make(chan interface{}, 8),
 			rest:  make([]byte, 0),
@@ -138,7 +138,7 @@ func (pp *polyPut) do(src polyPutSource) error {
 			count_errors = count_errors + 1
 		}
 	}
-	if count_errors >= 1 + len(subs) / 2 {
+	if count_errors >= 1+len(subs)/2 {
 		if err != nil {
 			err = errors.New("Quorum not reached")
 		}

@@ -37,13 +37,13 @@ type StaticConfig struct {
 // Returns the list of namespaces known in the (loaded) configuration
 func (cfg *StaticConfig) Namespaces() []string {
 	tmp := make(map[string]bool)
-	for k,_ := range cfg.pairs {
+	for k, _ := range cfg.pairs {
 		if idx := strings.Index(k, "/"); idx > 0 {
 			tmp[k[:idx]] = true
 		}
 	}
-	out := make([]string,0)
-	for k,_ := range tmp {
+	out := make([]string, 0)
+	for k, _ := range tmp {
 		out = append(out, k)
 	}
 	return out
@@ -52,11 +52,11 @@ func (cfg *StaticConfig) Namespaces() []string {
 // Returns all the keys known for the given namespace in the (loaded)
 // configuration
 func (cfg *StaticConfig) Keys(ns string) []string {
-	out := make([]string,0)
-	for k,_ := range cfg.pairs {
+	out := make([]string, 0)
+	for k, _ := range cfg.pairs {
 		if idx := strings.Index(k, "/"); idx > 0 {
 			if k[:idx] == ns {
-				out = append(out,k[idx+1:])
+				out = append(out, k[idx+1:])
 			}
 		}
 	}
@@ -110,7 +110,7 @@ func (cfg *StaticConfig) LoadWithContent(content []byte) error {
 	}
 	for _, section := range kvf.Sections() {
 		for _, key := range section.Keys() {
-			cfg.pairs[section.Name() + "/" + key.Name()] = key.Value()
+			cfg.pairs[section.Name()+"/"+key.Name()] = key.Value()
 		}
 	}
 	return nil

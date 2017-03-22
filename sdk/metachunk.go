@@ -17,8 +17,8 @@
 package oio
 
 import (
-	"io"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"sort"
