@@ -17,6 +17,7 @@
 package oio
 
 import (
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -78,7 +79,9 @@ func (pp *polyPut) do(src polyPutSource) error {
 	// create sub requests
 	for _, url := range pp.urls {
 		sub := &subReq{
-			req: nil, err: nil, wg: &wg,
+			req: nil,
+			err: nil,
+			wg: &wg,
 			input: make(chan []byte, 8),
 			ready: make(chan interface{}, 8),
 			rest:  make([]byte, 0),
@@ -104,8 +107,9 @@ func (pp *polyPut) do(src polyPutSource) error {
 
 	// Now feed the sub requests
 	for {
+		var count int
 		buf := make([]byte, 8192)
-		count, err := src.Read(buf)
+		count, err = src.Read(buf)
 		if err != nil {
 			for _, sub := range subs {
 				close(sub.input)
@@ -114,6 +118,8 @@ func (pp *polyPut) do(src polyPutSource) error {
 		} else {
 			for _, sub := range subs {
 				if sub.err == nil && !sub.done {
+					// send a new buffer when the subrequest tells it is ready
+					// to accept it.
 					if _, ok := <-sub.ready; ok {
 						sub.input <- buf[:count]
 					}
@@ -124,6 +130,19 @@ func (pp *polyPut) do(src polyPutSource) error {
 
 	// Wait for each subRequest to finish
 	wg.Wait()
+
+	// count the number of errors, we must reach the quorum
+	var count_errors int
+	for _, sub := range subs {
+		if sub.err != nil {
+			count_errors = count_errors + 1
+		}
+	}
+	if count_errors >= 1 + len(subs) / 2 {
+		if err != nil {
+			err = errors.New("Quorum not reached")
+		}
+	}
 
 	if err == io.EOF {
 		return nil
@@ -148,7 +167,11 @@ func (sr *subReq) do() {
 	}
 }
 
+// With Read(), the subReq class implements the io.Reader() interface.
+// The http.HttpRequests requires a Reader() as a source for its input.
 func (sr *subReq) Read(dst []byte) (int, error) {
+
+	// factorizes the data consumption from src to dst
 	doIt := func(src []byte) (int, error) {
 		n := copy(dst, src)
 		if n < len(src) {

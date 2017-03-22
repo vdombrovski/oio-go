@@ -92,6 +92,7 @@ const (
 	KeyProxyDirectory  = "proxy-dir"
 	KeyProxy           = "proxy"
 	KeyAutocreate      = "autocreate"
+	KeyForce           = "force"
 )
 
 // AccountName describes a set of getters for all the fields that uniquely
@@ -132,8 +133,13 @@ type ObjectName interface {
 	// Must return the object path (not empty)
 	Path() string
 
+	// Left empty when unknown, it returns the unique ID of the physical
+	// content. Some requests require it, e.g. the final commit of a
+	// content in a container (Container.PutContent())
+	Id() string
+
 	// Must return the object revision (leave 0 for the latest)
-	Version() int64
+	Version() uint64
 }
 
 // Minimal interface for a configuration set
@@ -180,22 +186,31 @@ type Chunk struct {
 	Hash     string `json:"hash"`
 }
 
-// A Content represents the minimal information stored in a container about a stored object.
-type Content struct {
+// A ContentHeader represents the minimal information stored in a container about a stored object.
+type ContentHeader struct {
 	Name           string `json:"name"`
+	Id             string `json:"id"`
 	Version        uint64 `json:"ver"`
 	Size           uint64 `json:"size"`
 	CTime          uint64 `json:"ctime"`
 	Deleted        bool   `json:"deleted,omitempty"`
 	Hash           string `json:"hash"`
 	Policy         string `json:"policy"`
-	SystemMetadata string `json:"system_metadata"`
+	ChunkMethod    string `json:"chunk_method"`
+	MimeType       string `json:"mime_type"`
+}
+
+type Content struct {
+	Header     ContentHeader
+	Properties []Property
+	System     []Property
+	Chunks     []Chunk
 }
 
 // ContainerListing is a handy structure to gather all the output
 // generated when ListContents() is called on the containers service
 type ContainerListing struct {
-	Objects    []Content
+	Objects    []ContentHeader
 	Properties []Property
 }
 
@@ -256,7 +271,7 @@ type Container interface {
 
 	// Create the given container. Returns false if nothing was created (i.e.
 	// (false,nil) means the container already exists)
-	CreateContainer(n ContainerName) (bool, error)
+	CreateContainer(n ContainerName, auto bool) (bool, error)
 
 	// Removes the container from the storage. Returns (true,nil) if the deletion
 	// actually happened. Returns false if not. (false,nil) means the container
@@ -271,13 +286,13 @@ type Container interface {
 	ListContents(n ContainerName) (ContainerListing, error)
 
 	// Get a description of the content whos ename is given
-	GetContent(n ObjectName) ([]Chunk, []Property, error)
+	GetContent(n ObjectName) (Content, error)
 
 	// Get places to upload a content with the given name and size
-	GenerateContent(n ObjectName, size uint64) ([]Chunk, error)
+	GenerateContent(n ObjectName, size uint64, auto bool) (Content, error)
 
 	// Save the places used by the content with the given name and size
-	PutContent(n ObjectName, size uint64, chunks []Chunk) error
+	PutContent(container ContainerName, content Content, auto bool) error
 
 	// Remove the given content from the storage
 	DeleteContent(n ObjectName) (bool, error)
@@ -286,7 +301,7 @@ type Container interface {
 type ObjectStorage interface {
 
 	// Uploads <size> bytes from <in> as an object named <n>.
-	PutContent(n ObjectName, size uint64, in io.ReadSeeker) error
+	PutContent(n ObjectName, size uint64, auto bool, in io.ReadSeeker) error
 
 	// Get a stream to read the content.
 	// TODO: make the output a "ReadSeekCloser" to let the appication efficiently
@@ -349,3 +364,4 @@ func MakeContainerClient(ns string, cfg Config) (Container, error) {
 	out := &containerClient{ns: ns, config: cfg}
 	return out, nil
 }
+

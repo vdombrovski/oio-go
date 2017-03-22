@@ -23,43 +23,39 @@ import (
 	"flag"
 	oio "github.com/jfsmig/oio-go/sdk"
 	"io"
+	"os"
 	"log"
-	"math/rand"
-	"strconv"
-	"time"
 )
-
-func randName(prefix string) string {
-	return prefix + "-" + strconv.FormatUint(uint64(rand.Int63()), 10)
-}
 
 func main() {
 
-	rand.Seed(time.Now().UnixNano())
-
 	var ns, acct, user, subtype, path string
-
 	var ok bool
 	var err error
 	var dir oio.Directory
 	var bkt oio.Container
 	var obj oio.ObjectStorage
 
-	flag.StringVar(&ns, "ns", "", "Namespace (mandatory)")
-	flag.StringVar(&user, "user", randName("user"), "User (optional)")
-	flag.StringVar(&path, "path", randName("path"), "Path (optional)")
-	flag.StringVar(&acct, "account", randName("acct"), "Account (optional)")
-	flag.StringVar(&subtype, "type", "", "Service subtype (optional)")
+	flag.StringVar(&ns, "ns", os.Getenv("OIO_NS"), "Namespace (mandatory)")
+	flag.StringVar(&acct, "account", os.Getenv("OIO_ACCOUNT"), "Account (optional)")
+	flag.StringVar(&user, "user", os.Getenv("OIO_USER"), "User (optional)")
+	flag.StringVar(&path, "path", os.Getenv("OIO_PATH"), "Path (optional)")
+	flag.StringVar(&subtype, "type", os.Getenv("OIO_TYPE"), "Service subtype (optional)")
 	flag.Parse()
 
 	if ns == "" {
 		log.Fatal("Namespace is not set")
 	}
+	if acct == "" {
+		log.Fatal("Account is not set")
+	}
 
 	name := oio.FlatName{N: ns, A: acct, U: user, P: path}
 
 	cfg := oio.MakeStaticConfig()
-	cfg.Set(ns, "proxy", "127.0.0.1:6002")
+	if err := cfg.LoadWithLocal(); err != nil {
+		log.Fatal("Failed to load all the local configuration")
+	}
 	cfg.Set(ns, "autocreate", "true")
 
 	dir, _ = oio.MakeDirectoryClient(ns, cfg)
@@ -102,7 +98,7 @@ func main() {
 			log.Fatal("HasContainer() error: ", err)
 		}
 		if !ok {
-			ok, err = bkt.CreateContainer(&name)
+			ok, err = bkt.CreateContainer(&name, true)
 			if err != nil {
 				log.Fatal("CreateContainer() error: ", err)
 			} else if ok {
@@ -126,7 +122,7 @@ func main() {
 		var size uint64 = 4000
 		bulk := make([]byte, size)
 		bulkReader := bytes.NewReader(bulk)
-		err = obj.PutContent(&name, size, bulkReader)
+		err = obj.PutContent(&name, size, true, bulkReader)
 		if err != nil {
 			log.Fatal("PutContent(): ", err)
 		} else {

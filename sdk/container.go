@@ -50,15 +50,19 @@ func (cli *containerClient) simpleRequest(req *http.Request) (bool, error) {
 	}
 }
 
-func (cli *containerClient) actionFlags(force bool) string {
+func (cli *containerClient) actionFlags(autocreate, force bool) string {
 	var tokens []string = make([]string, 0)
-	if ok, _ := cli.config.GetBool(cli.ns, KeyAutocreate); ok {
+	if ok, _ := cli.config.GetBool(cli.ns, KeyAutocreate); ok && autocreate {
 		tokens = append(tokens, "autocreate")
 	}
-	if force {
+	if ok, _ := cli.config.GetBool(cli.ns, KeyForce); ok && force {
 		tokens = append(tokens, "force")
 	}
 	return strings.Join(tokens, ", ")
+}
+
+func (cli *containerClient) autocreateFlag(auto bool) string {
+	return cli.actionFlags(true, false)
 }
 
 func (cli *containerClient) getRefUrl(n UserName, action string) string {
@@ -75,12 +79,13 @@ func (cli *containerClient) getContentUrl(n ObjectName, action string) string {
 		url.QueryEscape(n.Account()), url.QueryEscape(n.User()), url.QueryEscape(n.Path()))
 }
 
-func (cli *containerClient) CreateContainer(n ContainerName) (bool, error) {
+func (cli *containerClient) CreateContainer(n ContainerName, auto bool) (bool, error) {
 	if n.NS() != cli.ns {
 		return false, ErrorNsNotManaged
 	}
-	req, _ := http.NewRequest("POST", cli.getRefUrl(n, "create"), nil)
-	req.Header.Set("X-oio-action-mode", cli.actionFlags(false))
+	req, _ := http.NewRequest("POST", cli.getRefUrl(n, "create"),
+			bytes.NewBuffer([]byte("{}")))
+	req.Header.Set("X-oio-action-mode", cli.autocreateFlag(auto))
 	return cli.simpleRequest(req)
 }
 
@@ -89,7 +94,6 @@ func (cli *containerClient) DeleteContainer(n ContainerName) (bool, error) {
 		return false, ErrorNsNotManaged
 	}
 	req, _ := http.NewRequest("POST", cli.getRefUrl(n, "destroy"), nil)
-	req.Header.Set("X-oio-action-mode", cli.actionFlags(false))
 	return cli.simpleRequest(req)
 }
 
@@ -111,7 +115,10 @@ func (cli *containerClient) ListContents(n ContainerName) (ContainerListing, err
 		return out, ErrorNsNotManaged
 	}
 	req, _ := http.NewRequest("GET", cli.getRefUrl(n, "list"), nil)
-	out := ContainerListing{Objects: make([]Content, 0), Properties: make([]Property, 0)}
+	out := ContainerListing{
+		Objects: make([]ContentHeader, 0),
+		Properties: make([]Property, 0),
+	}
 
 	p := makeHttpClient(cli.ns, cli.config)
 	rep, err := p.Do(req)
@@ -133,12 +140,14 @@ func (cli *containerClient) ListContents(n ContainerName) (ContainerListing, err
 	}
 }
 
-func (cli *containerClient) GetContent(n ObjectName) ([]Chunk, []Property, error) {
-	chunks := make([]Chunk, 0)
-	props := make([]Property, 0)
+func (cli *containerClient) GetContent(n ObjectName) (Content, error) {
+	var content Content
+	content.Chunks = make([]Chunk, 0)
+	content.Properties = make([]Property, 0)
+	content.System = make([]Property, 0)
 
 	if n.NS() != cli.ns {
-		return chunks, props, ErrorNsNotManaged
+		return content, ErrorNsNotManaged
 	}
 	req, _ := http.NewRequest("GET", cli.getContentUrl(n, "show"), nil)
 
@@ -148,32 +157,33 @@ func (cli *containerClient) GetContent(n ObjectName) ([]Chunk, []Property, error
 		defer rep.Body.Close()
 	}
 	if err != nil {
-		return chunks, props, err
+		return content, err
 	}
 
 	if rep.StatusCode/100 == 2 {
 		decoder := json.NewDecoder(rep.Body)
-		err = decoder.Decode(&chunks)
-		return chunks, props, err
+		err = decoder.Decode(&content.Chunks)
+		return content, err
 	} else if rep.StatusCode == 404 {
-		return chunks, props, ErrorNotFound
+		return content, ErrorNotFound
 	} else {
-		return chunks, props, readProxyError(rep.StatusCode, rep)
+		return content, readProxyError(rep.StatusCode, rep)
 	}
 }
 
-func (cli *containerClient) GenerateContent(n ObjectName, size uint64) ([]Chunk, error) {
+func (cli *containerClient) GenerateContent(n ObjectName, size uint64, auto bool) (Content, error) {
+	var content Content
+
 	if n.NS() != cli.ns {
-		return nil, ErrorNsNotManaged
+		return content, ErrorNsNotManaged
 	}
 
+	// Query the directory through the proxy
 	args := map[string]string{"policy": "", "size": strconv.FormatUint(size, 10)}
 	encoded, _ := json.Marshal(args)
 	req, _ := http.NewRequest("POST", cli.getContentUrl(n, "prepare"),
 		bytes.NewBuffer(encoded))
-	req.Header.Set("X-oio-action-mode", cli.actionFlags(false))
-
-	chunks := make([]Chunk, 0)
+	req.Header.Set("X-oio-action-mode", cli.autocreateFlag(auto))
 
 	p := makeHttpClient(cli.ns, cli.config)
 	rep, err := p.Do(req)
@@ -181,30 +191,43 @@ func (cli *containerClient) GenerateContent(n ObjectName, size uint64) ([]Chunk,
 		defer rep.Body.Close()
 	}
 	if err != nil {
-		return chunks, err
+		return content, err
 	}
 
-	if rep.StatusCode/100 == 2 {
-		decoder := json.NewDecoder(rep.Body)
-		err = decoder.Decode(&chunks)
-		return chunks, err
-	} else if rep.StatusCode == 404 {
-		return chunks, ErrorNotFound
-	} else {
-		return chunks, readProxyError(rep.StatusCode, rep)
+	// Unpack the result of the request
+	content.Chunks = make([]Chunk, 0)
+	if rep.StatusCode == 404 {
+		return content, ErrorNotFound
 	}
+	if rep.StatusCode/100 != 2 {
+		return content, readProxyError(rep.StatusCode, rep)
+	}
+
+	decoder := json.NewDecoder(rep.Body)
+	err = decoder.Decode(&content.Chunks)
+	if err != nil {
+		return content, err
+	}
+
+	content.Header.Id = rep.Header.Get("X-oio-content-meta-id")
+	content.Header.Name = rep.Header.Get("X-oio-content-meta-name")
+	content.Header.Policy = rep.Header.Get("X-oio-content-meta-policy")
+	content.Header.Version, err = strconv.ParseUint(rep.Header.Get("X-oio-content-meta-version"), 10, 64)
+	return content, err
 }
 
-func (cli *containerClient) PutContent(n ObjectName, size uint64, chunks []Chunk) error {
-	if n.NS() != cli.ns {
-		return ErrorNsNotManaged
-	}
 
-	body, _ := json.Marshal(chunks)
-	req, _ := http.NewRequest("POST", cli.getContentUrl(n, "create"),
+// Implements an ObjectName
+
+func (cli *containerClient) PutContent(container ContainerName, content Content, auto bool) error {
+
+	fqc := fullyQualifiedContent{content:&content, container:container}
+
+	body, _ := json.Marshal(content.Chunks)
+	req, _ := http.NewRequest("POST", cli.getContentUrl(&fqc, "create"),
 		bytes.NewBuffer(body))
-	req.Header.Set("X-oio-action-mode", cli.actionFlags(false))
-	req.Header.Set("X-oio-content-meta-length", strconv.FormatUint(size, 10))
+	req.Header.Set("X-oio-action-mode", cli.autocreateFlag(auto))
+	req.Header.Set("X-oio-content-meta-length", strconv.FormatUint(content.Header.Size, 10))
 
 	p := makeHttpClient(cli.ns, cli.config)
 	rep, err := p.Do(req)

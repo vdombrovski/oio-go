@@ -18,6 +18,7 @@ package oio
 
 import (
 	"io"
+	"errors"
 	"net"
 	"net/http"
 	"sort"
@@ -166,6 +167,20 @@ func (mcr *metaChunkReader) open() error {
 
 	var err error
 	mcr.resp, err = mcr.client.Get(mcr.mc.data[0].Url)
+	if err == nil {
+		switch mcr.resp.StatusCode {
+		case 200:
+		case 201:
+		case 206:
+			// OK
+		case 403:
+			err = errors.New("Chunk forbidden")
+		case 404:
+			err = errors.New("Chunk not found")
+		default:
+			err = errors.New("Unexpected error from the RAWX")
+		}
+	}
 	return err
 }
 

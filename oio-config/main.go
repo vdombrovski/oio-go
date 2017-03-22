@@ -21,6 +21,7 @@ package main
 import (
 	oio "github.com/jfsmig/oio-go/sdk"
 	"log"
+	"fmt"
 )
 
 func main() {
@@ -35,7 +36,7 @@ func main() {
 	for _, ns := range cfg.Namespaces() {
 		for _, k := range cfg.Keys(ns) {
 			v, _ := cfg.GetString(ns, k)
-			log.Println(ns, k, v)
+			fmt.Println(ns, k, v)
 		}
 	}
 }
