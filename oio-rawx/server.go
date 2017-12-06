@@ -1,5 +1,5 @@
 // OpenIO SDS Go rawx
-// Copyright (C) 2015 OpenIO
+// Copyright (C) 2015-2018 OpenIO SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public
@@ -16,11 +16,6 @@
 
 package main
 
-/*
-Serves a BLOB repository via a HTTP server.
-@TODO implement compression with any of the compress.* modules
-*/
-
 import (
 	"bytes"
 	"compress/zlib"
@@ -31,9 +26,12 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"log/syslog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
+	"time"
 )
 
 func setErrorString(rep http.ResponseWriter, s string) {
@@ -51,6 +49,20 @@ type rawxService struct {
 	compress bool
 }
 
+type chunkHandler struct {
+	rawx *rawxService
+}
+
+type chunkRequest struct {
+	rawx    *rawxService
+	req     *http.Request
+	chunkid string
+	reqid   string
+  status int
+  time_spent uint64
+  bytes_out  uint64
+}
+
 type attrMapping struct {
 	attr   string
 	header string
@@ -60,7 +72,7 @@ const bufSize = 16384
 
 var (
 	HeaderPrefix string = "X-Oio-"
-	AttrPrefix          = "user.grid."
+	AttrPrefix   string = "user.grid."
 )
 
 var (
@@ -73,6 +85,8 @@ var (
 )
 
 var (
+	ErrChunkExists           = errors.New("Chunk already exists")
+	ErrInvalidChunkName      = errors.New("Invalid chunk name")
 	ErrCompressionNotManaged = errors.New("Compression mode not managed")
 	ErrMissingHeader         = errors.New("Missing mandatory header")
 	ErrMd5Mismatch           = errors.New("MD5 sum mismatch")
@@ -125,10 +139,32 @@ func putData(out io.Writer, ul *upload) error {
 	return nil
 }
 
-func putFinish(out FileWriter, req *http.Request, h string) error {
+func (self *chunkRequest) replyError(rep http.ResponseWriter, err error) {
+	if os.IsExist(err) {
+		self.status = http.StatusForbidden
+	} else {
+		setError(rep, err)
+		if err == os.ErrInvalid {
+			self.status = http.StatusBadRequest
+		} else {
+			switch err {
+			case ErrInvalidChunkName:
+				self.status = http.StatusBadRequest
+			case ErrMissingHeader:
+				self.status = http.StatusBadRequest
+			default:
+				self.status = http.StatusInternalServerError
+			}
+		}
+	}
+
+  rep.WriteHeader(self.status)
+}
+
+func (self *chunkRequest) putFinish(out FileWriter, h string) error {
 
 	// If a hash has been sent, it must match the hash computed
-	if h0 := req.Header.Get("chunkhash"); h0 != "" {
+	if h0 := self.req.Header.Get("chunkhash"); h0 != "" {
 		if h != strings.ToUpper(h0) {
 			return ErrMd5Mismatch
 		}
@@ -136,7 +172,7 @@ func putFinish(out FileWriter, req *http.Request, h string) error {
 
 	// Set the xattr coming from the request
 	for _, pair := range AttrMap {
-		v := req.Header.Get(HeaderPrefix + pair.header)
+		v := self.req.Header.Get(HeaderPrefix + pair.header)
 		if v == "" {
 			return ErrMissingHeader
 		}
@@ -151,28 +187,23 @@ func putFinish(out FileWriter, req *http.Request, h string) error {
 	return nil
 }
 
-func (self *rawxService) doPut(rep http.ResponseWriter, req *http.Request) {
+func (self *chunkRequest) upload(rep http.ResponseWriter) {
+
+	// Check all the mandatory headers are present
+
 	// Attempt a PUT in the repository
-	out, err := self.repo.Put(req.URL.Path)
+	out, err := self.rawx.repo.Put(self.chunkid)
 	if err != nil {
-		if os.IsExist(err) {
-			rep.WriteHeader(http.StatusForbidden)
-		} else if err == os.ErrInvalid {
-			setError(rep, err)
-			rep.WriteHeader(http.StatusBadRequest)
-		} else {
-			setError(rep, err)
-			rep.WriteHeader(http.StatusInternalServerError)
-		}
+		self.replyError(rep, err)
 		return
 	}
 
 	// Upload, and maybe manage compression
 	var ul upload
-	ul.in = req.Body
-	ul.length = req.ContentLength
+	ul.in = self.req.Body
+	ul.length = self.req.ContentLength
 
-	if self.compress {
+	if self.rawx.compress {
 		z := zlib.NewWriter(out)
 		err = putData(z, &ul)
 		errClose := z.Close()
@@ -185,7 +216,7 @@ func (self *rawxService) doPut(rep http.ResponseWriter, req *http.Request) {
 
 	// Finish with the XATTR management
 	if err != nil {
-		err = putFinish(out, req, ul.h)
+		err = self.putFinish(out, ul.h)
 	}
 
 	// Then reply
@@ -200,25 +231,13 @@ func (self *rawxService) doPut(rep http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (self *rawxService) doGetStats(rep http.ResponseWriter, req *http.Request) {
-	allCounters := counters.Get()
-	allTimers := timers.Get()
-
-	rep.WriteHeader(200)
-	for i, n := range names {
-		rep.Write([]byte(fmt.Sprintf("timer.%s %v", n, allTimers[i])))
-		rep.Write([]byte(fmt.Sprintf("counter.%s %v", n, allCounters[i])))
-	}
-}
-
-func (self *rawxService) doGetChunk(rep http.ResponseWriter, req *http.Request) {
-	inChunk, err := self.repo.Get(req.URL.Path)
+func (self *chunkRequest) download(rep http.ResponseWriter) {
+	inChunk, err := self.rawx.repo.Get(self.chunkid)
 	if inChunk != nil {
 		defer inChunk.Close()
 	}
 	if err != nil {
-		setError(rep, err)
-		rep.WriteHeader(http.StatusInternalServerError)
+		self.replyError(rep, err)
 		return
 	}
 
@@ -258,6 +277,7 @@ func (self *rawxService) doGetChunk(rep http.ResponseWriter, req *http.Request) 
 	for {
 		n, err := in.Read(buf)
 		if n > 0 {
+      self.bytes_out = self.bytes_out + uint64(n)
 			rep.Write(buf[:n])
 		}
 		if err != nil {
@@ -269,40 +289,63 @@ func (self *rawxService) doGetChunk(rep http.ResponseWriter, req *http.Request) 
 	}
 }
 
-func (self *rawxService) doDel(rep http.ResponseWriter, req *http.Request) {
-	if err := self.repo.Del(req.URL.Path); err != nil {
-		if os.IsNotExist(err) {
-			rep.WriteHeader(http.StatusNotFound)
-		} else {
-			setError(rep, err)
-			rep.WriteHeader(http.StatusInternalServerError)
-		}
+func (self *chunkRequest) removal(rep http.ResponseWriter) {
+	if err := self.rawx.repo.Del(self.chunkid); err != nil {
+		self.replyError(rep, err)
 	} else {
 		rep.WriteHeader(200)
 	}
 }
 
-// Makes the blobHttpHandler a http.Handler
-func (self *rawxService) ServeHTTP(rep http.ResponseWriter, req *http.Request) {
-	var which int = Unexpected
-	if req.Method == "PUT" {
-		which = StatSlotPut
-		self.doPut(rep, req)
-	} else if req.Method == "GET" {
-		if req.URL.Path == "/stat" {
-			which = StatSlotGetStats
-			self.doGetStats(rep, req)
-		} else {
-			which = StatSlotGet
-			self.doGetChunk(rep, req)
-		}
-	} else if req.Method == "DELETE" {
-		which = StatSlotDel
-		self.doDel(rep, req)
-	} else {
-		setErrorString(rep, "only PUT,GET,DELETE")
+func (self *chunkHandler) ServeHTTP(rep http.ResponseWriter, req *http.Request) {
+	var stats_hits, stats_time int
+	pre := time.Now()
+
+	// Extract some common headers
+	reqid := req.Header.Get("X-oio-reqid")
+	if len(reqid) <= 0 {
+		reqid = req.Header.Get("X-trans-id")
+	}
+  if len(reqid) > 0 {
+    rep.Header().Set("X-trans-id", reqid)
+    rep.Header().Set("X-oio-reqid", reqid)
+  }
+
+	// Forward to the request method
+	chunkreq := chunkRequest{ rawx: self.rawx, req: req,
+		chunkid: filepath.Base(req.URL.Path), reqid: reqid,
+	}
+
+	switch req.Method {
+	case "PUT":
+		stats_time = TimePut
+		stats_hits = HitsPut
+		chunkreq.upload(rep)
+	case "GET":
+		stats_time = TimeGet
+		stats_hits = HitsGet
+		chunkreq.download(rep)
+	case "DELETE":
+		stats_time = TimeDel
+		stats_hits = HitsDel
+		chunkreq.removal(rep)
+	default:
+		stats_time = TimeOther
+		stats_hits = HitsOther
 		rep.WriteHeader(http.StatusMethodNotAllowed)
 	}
-	counters.Increment(which)
-	log.Println("ACCESS", req)
+	spent := uint64(time.Since(pre).Nanoseconds() / 1000)
+
+	// Increment counters and log the request
+	counters.Increment(HitsTotal)
+	counters.Increment(stats_hits)
+	counters.Add(TimeTotal, spent)
+	counters.Add(stats_time, spent)
+
+  trace := fmt.Sprintf(
+    "%d - INF local peer %s %d %d %d",
+    os.Getpid(), req.URL.Path,
+    chunkreq.status, spent, chunkreq.bytes_out)
+  logger, _ := syslog.NewLogger(syslog.LOG_INFO|syslog.LOG_LOCAL0, 0)
+  logger.Print(trace)
 }

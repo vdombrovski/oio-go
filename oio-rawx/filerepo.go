@@ -1,5 +1,5 @@
 // OpenIO SDS Go rawx
-// Copyright (C) 2015 OpenIO
+// Copyright (C) 2015-2018 OpenIO SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public
@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"os"
+	"log"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -27,8 +28,8 @@ import (
 
 const (
 	hashStart    = true
-	hashWidth    = 2
-	hashDepth    = 2
+	hashWidth    = 3
+	hashDepth    = 1
 	putOpenFlags = os.O_WRONLY | os.O_CREATE | os.O_EXCL
 	putOpenMode  = 0644
 	putMkdirMode = 0755
@@ -47,12 +48,14 @@ type Notifier interface {
 type FileRepository struct {
 	notifier     Notifier
 	root         string
-	HashStart    bool
+	putOpenMode  os.FileMode
+	putMkdirMode os.FileMode
 	HashWidth    int
 	HashDepth    int
 	putOpenFlags int
-	putOpenMode  os.FileMode
-	putMkdirMode os.FileMode
+	HashStart    bool
+  sync_file    bool
+  sync_dir     bool
 }
 
 func MakeFileRepository(root string, notifier Notifier) *FileRepository {
@@ -69,6 +72,8 @@ func MakeFileRepository(root string, notifier Notifier) *FileRepository {
 	r.putOpenFlags = putOpenFlags
 	r.putOpenMode = putOpenMode
 	r.putMkdirMode = putMkdirMode
+  r.sync_file = false
+  r.sync_dir = true
 
 	return r
 }
@@ -143,13 +148,21 @@ func (r *FileRepository) Get(name string) (FileReader, error) {
 }
 
 func (r *FileRepository) realPut(n, p string) (FileWriter, error) {
-	f, err := os.OpenFile(p, r.putOpenFlags, r.putOpenMode)
+  path_temp := p + ".pending"
+	f, err := os.OpenFile(path_temp, r.putOpenFlags, r.putOpenMode)
 	if err == nil {
-		w := new(RealFileWriter)
-		w.notifier = r.notifier
-		w.impl = f
-		w.path = p
-		return w, nil
+    // Tempfile now open, ready to work with
+    if _, err = os.Stat(p); err == nil {
+      os.Remove(path_temp)
+      f.Close()
+      return nil, ErrChunkExists
+    }
+
+		return &RealFileWriter{
+			name: p, path_final: p, path_temp: path_temp,
+			impl: f, notifier: r.notifier,
+      sync_file: r.sync_file, sync_dir: r.sync_dir,
+		}, nil
 	} else if os.IsNotExist(err) { // Lazy dir creation
 		err = os.MkdirAll(filepath.Dir(p), r.putMkdirMode)
 		if err == nil {
@@ -181,36 +194,36 @@ func (r *FileRepository) nameToPath(name string) (string, error) {
 	name = strings.Replace(filepath.Clean(name), "/", "@", -1)
 
 	// Hash computations
-	bn := ""
+	tokens := make([]string, 0, 5)
+	tokens = append(tokens, r.root)
 	if r.HashStart { // Hash the beginning of the basename
 		for i := 0; i < r.HashDepth; i++ {
-			if len(bn) > 0 {
-				bn += "/"
-			}
 			start := i * r.HashDepth
-			bn += name[start : start+r.HashWidth]
+			tokens = append(tokens, name[start:start+r.HashWidth])
 		}
 	} else { // Hash the end of the basename
 		for i := 0; i < r.HashDepth; i++ {
-			if len(bn) > 0 {
-				bn += "/"
-			}
 			start := len(name) - ((i + 1) * r.HashDepth)
-			bn += name[start : start+r.HashWidth]
+			tokens = append(tokens, name[start:start+r.HashWidth])
 		}
 	}
-	return filepath.Join(r.root, bn), nil
+
+	tokens = append(tokens, name)
+	return filepath.Join(tokens...), nil
 }
 
 type RealFileWriter struct {
-	notifier Notifier
-	path     string
-	name     string
-	impl     *os.File
+	name       string
+	path_final string
+	path_temp  string
+	impl       *os.File
+	notifier   Notifier
+  sync_file  bool
+  sync_dir   bool
 }
 
 func (w *RealFileWriter) Name() string {
-	return filepath.Base(w.path)
+	return w.name
 }
 
 func (w *RealFileWriter) Seek(o int64) error {
@@ -219,7 +232,7 @@ func (w *RealFileWriter) Seek(o int64) error {
 }
 
 func (w *RealFileWriter) SetAttr(n string, v []byte) error {
-	err := syscall.Setxattr(w.path, n, v, 0)
+	err := syscall.Setxattr(w.path_temp, n, v, 0)
 	return err
 }
 
@@ -227,22 +240,52 @@ func (w *RealFileWriter) Sync() error {
 	return w.impl.Sync()
 }
 
-func (w *RealFileWriter) Commit() error {
-	w.impl.Sync()
-	err := w.impl.Close()
-	if err == nil {
-		w.notifier.NotifyPut(w.name)
-	}
-	return err
+func (w *RealFileWriter) Write(buf []byte) (int, error) {
+	return w.impl.Write(buf)
 }
 
 func (w *RealFileWriter) Abort() error {
-	os.Remove(w.path)
+	os.Remove(w.path_temp)
 	return w.impl.Close()
 }
 
-func (w *RealFileWriter) Write(buf []byte) (int, error) {
-	return w.impl.Write(buf)
+func (w *RealFileWriter) syncFile() {
+  if w.sync_file {
+    //w.impl.Sync()
+    syscall.Fdatasync(int(w.impl.Fd()))
+  }
+}
+
+func (w *RealFileWriter) syncDir() {
+  if w.sync_dir {
+    dir := filepath.Dir(w.path_final)
+    if f, err := os.OpenFile(dir, os.O_RDONLY, 0); err == nil {
+      f.Sync()
+      f.Close()
+    } else {
+      log.Println("Directory sync error: ", err)
+    }
+  }
+}
+
+func (w *RealFileWriter) Commit() error {
+  w.syncFile()
+	err := w.impl.Close()
+	if err == nil {
+		err = os.Rename(w.path_temp, w.path_final)
+		if err == nil {
+      w.syncDir()
+			w.notifier.NotifyPut(w.name)
+		} else {
+      log.Println("Rename error: ", err)
+    }
+	} else {
+    log.Println("Close error: ", err)
+  }
+	if err != nil {
+		os.Remove(w.path_temp)
+	}
+	return err
 }
 
 type RealFileReader struct {

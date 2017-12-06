@@ -8,8 +8,8 @@ Licensed under the terms of AGPLv3
 
   * [ ] metadata modification (POST? PROPPATCH?)
   * [ ] Partial GET (Range header not considered at all)
-  * [ ] .pending management
   * [ ] Access log in a format compliant with the other OpenIO services
+  * [x] .pending management
   * [x] /stat request handling
   * [x] Compression to be made.
   * [x] xattr-lock of the volume

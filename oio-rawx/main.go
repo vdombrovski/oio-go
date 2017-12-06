@@ -1,5 +1,5 @@
 // OpenIO SDS Go rawx
-// Copyright (C) 2015 OpenIO
+// Copyright (C) 2015-2018 OpenIO SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public
@@ -79,7 +79,11 @@ func main() {
 	}
 
 	rawx := &rawxService{ns, ipPort, chunkrepo, false}
-	if err := http.ListenAndServe(rawx.url, rawx); err != nil {
+	http.Handle("/chunk", &chunkHandler{rawx})
+	http.Handle("/info", &statHandler{rawx})
+	http.Handle("/stat", &statHandler{rawx})
+	http.Handle("/", &chunkHandler{rawx})
+	if err := http.ListenAndServe(rawx.url, nil); err != nil {
 		log.Fatal("HTTP error : ", err)
 	}
 }

@@ -1,5 +1,5 @@
 // OpenIO SDS Go rawx
-// Copyright (C) 2015 OpenIO
+// Copyright (C) 2015-2018 OpenIO SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public
@@ -23,7 +23,6 @@ alternative file names, etc.
 
 import (
 	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -130,7 +129,7 @@ func (self *chunkRepository) Put(name string) (FileWriter, error) {
 // Only accepts hexadecimal strings of 64 characters, and return potential
 // matches
 func (self *chunkRepository) nameToPath(name string) ([]string, error) {
-	name = strings.ToUpper(filepath.Base(name))
+	name = strings.ToUpper(name)
 	if err := self.isValid(name); err != nil {
 		return nil, err
 	} else {
@@ -145,13 +144,13 @@ func (self *chunkRepository) isValid(name string) error {
 	var n rune
 	for i, n = range name {
 		if !self.isValidChar(byte(n)) {
-			return os.ErrInvalid
+			return ErrInvalidChunkName
 		}
 	}
 	if i == 63 {
 		return nil
 	}
-	return os.ErrInvalid
+	return ErrInvalidChunkName
 }
 
 func (self *chunkRepository) isValidChar(b byte) bool {
