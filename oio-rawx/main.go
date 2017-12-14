@@ -24,6 +24,7 @@ http handler.
 import (
 	"flag"
 	"log"
+	"log/syslog"
 	"net"
 	"net/http"
 	"path/filepath"
@@ -72,17 +73,31 @@ func main() {
 		usage("Basedir must be absolute")
 	}
 
+	var rawxid string
+
 	filerepo := MakeFileRepository(basedir, nil)
 	chunkrepo := MakeChunkRepository(filerepo)
 	if err := chunkrepo.Lock(ns, ipPort); err != nil {
 		usage("Basedir cannot be locked with xattr : " + err.Error())
 	}
 
-	rawx := &rawxService{ns, ipPort, chunkrepo, false}
-	http.Handle("/chunk", &chunkHandler{rawx})
-	http.Handle("/info", &statHandler{rawx})
-	http.Handle("/stat", &statHandler{rawx})
-	http.Handle("/", &chunkHandler{rawx})
+	logger_access, _ := syslog.NewLogger(syslog.LOG_INFO|syslog.LOG_LOCAL0, 0)
+	logger_error, _ := syslog.NewLogger(syslog.LOG_INFO|syslog.LOG_LOCAL1, 0)
+	rawx := rawxService{
+		ns:            ns,
+		id:            rawxid,
+		url:           ipPort,
+		repo:          chunkrepo,
+		compress:      false,
+		logger_access: logger_access,
+		logger_error:  logger_error,
+	}
+
+	http.Handle("/chunk", &chunkHandler{&rawx})
+	http.Handle("/info", &statHandler{&rawx})
+	http.Handle("/stat", &statHandler{&rawx})
+	http.Handle("/list", &listHandler{&rawx})
+	http.Handle("/", &chunkHandler{&rawx})
 	if err := http.ListenAndServe(rawx.url, nil); err != nil {
 		log.Fatal("HTTP error : ", err)
 	}
