@@ -20,3 +20,26 @@ Licensed under the terms of AGPLv3
   * [x] Chunks hashed path
   * [x] MD5 computation of the DATA put returned in the right header
 
+## Install and test:
+
+> Make sure your target FS supports xattrs
+
+```sh
+cd ~/go/src
+git clone [this] .
+cd oio-go/oio-rawx
+go build -o rawx *.go
+mkdir -p ~/mnt/test
+./rawx $(realpath ~/mnt/test)
+```
+
+The rawx service will be listening on **127.0.0.1:5999**, on the namespace **OPENIO**, and use the repo at `~/mnt/test`.
+See `./rawx -h` for more options.
+
+## Cleanup the xattrs of a directory
+
+```
+apt install -y xattr
+setfattr -x user.rawx_server.address ~/mnt/test
+setfattr -x user.rawx_server.namespace ~/mnt/test
+```

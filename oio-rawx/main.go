@@ -29,68 +29,79 @@ import (
 	"net/http"
 	"path/filepath"
 	"regexp"
+	"os"
+	"fmt"
 )
 
-func usage(why string) {
-	log.Println("rawx NS IP:PORT BASEDIR")
-	log.Fatal(why)
-}
-
-func checkUrl(url string) bool {
+func checkURL(url string) {
 	addr, err := net.ResolveTCPAddr("tcp", url)
-	if err != nil {
-		return false
+	if (err != nil || addr.Port <= 0) {
+		log.Fatalf("%s is not a valid URL", url)
 	}
-	if addr.Port <= 0 {
-		return false
-	}
-	return true
 }
 
-func checkNamespace(ns string) bool {
-	ok, _ := regexp.MatchString("[0-9a-zA-Z]+(\\.[0-9a-zA-Z]+)*", ns)
-	return ok
+func checkNS(ns string) {
+	if ok, _ := regexp.MatchString("[0-9a-zA-Z]+(\\.[0-9a-zA-Z]+)*", ns); !ok {
+		log.Fatalf("%s is not a valid namespace name", ns)
+	}
 }
+
 
 func main() {
+	nsPtr := flag.String("ns", "OPENIO", "Namespace to run on")
+	addrPtr := flag.String("addr", "127.0.0.1:5999", "IP:PORT to run the rawx service on")
+
+	flag.Usage = func() {
+	        fmt.Fprintf(os.Stderr, "Usage of %s: [filerepo] (filerepo)\n", os.Args[0])
+	        flag.PrintDefaults()
+	}
+
 	flag.Parse()
-	if flag.NArg() != 3 {
-		usage("Missing positional arguments")
+
+	if flag.NArg() == 0 {
+		log.Fatalln("Missing target filerepo(s)")
 	}
 
-	ns := flag.Arg(0)
-	if !checkNamespace(ns) {
-		usage("Invalid namespace Format")
+	checkNS(*nsPtr)
+	checkURL(*addrPtr)
+
+ 	var filerepos = make([]*FileRepository, 0)
+
+	for _, repo := range flag.Args() {
+		basedir := filepath.Clean(repo)
+		if !filepath.IsAbs(basedir) {
+			log.Fatalf("Filerepo path must be absolute, got %s", basedir)
+		}
+		filerepos = append(filerepos, MakeFileRepository(basedir, nil))
 	}
 
-	ipPort := flag.Arg(1)
-	if !checkUrl(ipPort) {
-		usage("Invalid URL format")
+	if filerepos[0] == nil {
+		log.Fatalln("Invalid filerepo")
 	}
 
-	basedir := filepath.Clean(flag.Arg(2))
-	if !filepath.IsAbs(basedir) {
-		usage("Basedir must be absolute")
+	// TODO: Make chunk repo out of multiple filerepos
+	chunkrepo := MakeChunkRepository(filerepos[0])
+	if err := chunkrepo.Lock(*nsPtr, *addrPtr); err != nil {
+		log.Fatalf("Basedir cannot be locked with xattr : %s", err.Error())
 	}
 
-	var rawxid string
+	prepareServe(*nsPtr, *addrPtr, chunkrepo)
+}
 
-	filerepo := MakeFileRepository(basedir, nil)
-	chunkrepo := MakeChunkRepository(filerepo)
-	if err := chunkrepo.Lock(ns, ipPort); err != nil {
-		usage("Basedir cannot be locked with xattr : " + err.Error())
-	}
+func prepareServe(ns string, url string, chunkrepo *chunkRepository) {
+	var rawxID string
 
-	logger_access, _ := syslog.NewLogger(syslog.LOG_INFO|syslog.LOG_LOCAL0, 0)
-	logger_error, _ := syslog.NewLogger(syslog.LOG_INFO|syslog.LOG_LOCAL1, 0)
+	logAccess, _ := syslog.NewLogger(syslog.LOG_INFO|syslog.LOG_LOCAL0, 0)
+	logErr, _ := syslog.NewLogger(syslog.LOG_INFO|syslog.LOG_LOCAL1, 0)
+
 	rawx := rawxService{
 		ns:            ns,
-		id:            rawxid,
-		url:           ipPort,
+		id:            rawxID,
+		url:           url,
 		repo:          chunkrepo,
 		compress:      false,
-		logger_access: logger_access,
-		logger_error:  logger_error,
+		logger_access: logAccess,
+		logger_error:  logErr,
 	}
 
 	http.Handle("/chunk", &chunkHandler{&rawx})
