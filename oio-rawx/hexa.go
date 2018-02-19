@@ -16,29 +16,36 @@
 
 package main
 
-import (
-	"fmt"
-	"net/http"
+var (
+	accepted [32]byte
 )
 
-type listHandler struct {
-	rawx *rawxService
-}
-
-func doGetList(rr *rawxRequest) {
-	rr.replyCode(http.StatusOK)
-	for i := 0; i < 10; i++ {
-		rr.rep.Write([]byte(fmt.Sprintf("%p\n", rr)))
+func init() {
+	for i := 0; i < 32; i++ {
+		accepted[i] = 0
+	}
+	hexa := []byte{
+		'0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+		'A', 'B', 'C', 'D', 'E', 'F'}
+	for _, c := range hexa {
+		accepted[c/8] |= (1 << (c % 8))
 	}
 }
 
-func (self *listHandler) ServeHTTP(rep http.ResponseWriter, req *http.Request) {
-	self.rawx.serveHTTP(rep, req, func(rr *rawxRequest) {
-		switch req.Method {
-		case "GET":
-			doGetList(rr)
-		default:
-			rr.replyCode(http.StatusMethodNotAllowed)
+func isValidString(name string, length int) bool {
+	var i int
+	var n rune
+	for i, n = range name {
+		if !isValidChar(byte(n)) {
+			return false
 		}
-	})
+	}
+	if length > 0 && i+1 != length {
+		return false
+	}
+	return true
+}
+
+func isValidChar(b byte) bool {
+	return 0 != (accepted[b/8] & (1 << (b % 8)))
 }

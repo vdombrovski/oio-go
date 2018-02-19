@@ -62,7 +62,7 @@ func (self *rawxRequest) replyCode(code int) {
 	self.rep.WriteHeader(self.status)
 }
 
-func (self *rawxRequest) replyError(rep http.ResponseWriter, err error) {
+func (self *rawxRequest) replyError(err error) {
 	if os.IsExist(err) {
 		self.replyCode(http.StatusForbidden)
 	} else if os.IsPermission(err) {
@@ -70,7 +70,7 @@ func (self *rawxRequest) replyError(rep http.ResponseWriter, err error) {
 	} else if os.IsNotExist(err) {
 		self.replyCode(http.StatusNotFound)
 	} else {
-		setError(rep, err)
+		setError(self.rep, err)
 		if err == os.ErrInvalid {
 			self.replyCode(http.StatusBadRequest)
 		} else {

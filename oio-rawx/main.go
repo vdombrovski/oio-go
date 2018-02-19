@@ -96,8 +96,11 @@ func main() {
 	http.Handle("/chunk", &chunkHandler{&rawx})
 	http.Handle("/info", &statHandler{&rawx})
 	http.Handle("/stat", &statHandler{&rawx})
-	http.Handle("/list", &listHandler{&rawx})
+
+	// Some usages of the RAWX API don't use any prefix when calling
+	// operations on chunks.
 	http.Handle("/", &chunkHandler{&rawx})
+
 	if err := http.ListenAndServe(rawx.url, nil); err != nil {
 		log.Fatal("HTTP error : ", err)
 	}

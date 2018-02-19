@@ -21,7 +21,6 @@ import (
 	"compress/zlib"
 	"crypto/md5"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -41,37 +40,6 @@ type attrMapping struct {
 }
 
 const bufSize = 16384
-
-var (
-	HeaderPrefix string = "X-Oio-"
-	AttrPrefix   string = "user.grid."
-)
-
-var (
-	AttrNameCompression = "compression"
-	AttrNameChecksum    = "chunk.hash"
-	AttrNamePosition    = "chunk.position"
-	AttrNameSize        = "chunk.size"
-	AttrNameChunkId     = "chunk.id"
-	AttrNameAlias       = "content"
-	AttrNameChunkMethod = "content.chunk_method"
-	AttrNameMimeType    = "content.mime_type"
-	AttrNameStgPol      = "content.storage_policy"
-)
-
-var (
-	AttrValueZLib []byte = []byte("zlib")
-)
-
-var (
-	ErrChunkExists           = errors.New("Chunk already exists")
-	ErrInvalidChunkName      = errors.New("Invalid chunk name")
-	ErrCompressionNotManaged = errors.New("Compression mode not managed")
-	ErrMissingHeader         = errors.New("Missing mandatory header")
-	ErrMd5Mismatch           = errors.New("MD5 sum mismatch")
-	ErrInvalidRange          = errors.New("Invalid range")
-	ErrRangeNotSatisfiable   = errors.New("Range not satisfiable")
-)
 
 var AttrMap []attrMapping = []attrMapping{
 	{AttrNameAlias, "Alias"},
@@ -158,7 +126,7 @@ func uploadChunk(rr *rawxRequest, chunkid string) {
 	for _, k := range mandatoryHeaders {
 		if _, ok := rr.xattr[k]; !ok {
 			rr.rawx.logger_error.Print("Missing header %s", k)
-			rr.replyError(rr.rep, ErrMissingHeader)
+			rr.replyError(ErrMissingHeader)
 			return
 		}
 	}
@@ -166,7 +134,7 @@ func uploadChunk(rr *rawxRequest, chunkid string) {
 	// Attempt a PUT in the repository
 	out, err := rr.rawx.repo.Put(chunkid)
 	if err != nil {
-		rr.replyError(rr.rep, err)
+		rr.replyError(err)
 		return
 	}
 
@@ -193,7 +161,7 @@ func uploadChunk(rr *rawxRequest, chunkid string) {
 
 	// Then reply
 	if err != nil {
-		rr.replyError(rr.rep, err)
+		rr.replyError(err)
 		out.Abort()
 	} else {
 		out.Commit()
@@ -213,7 +181,7 @@ func checkChunk(rr *rawxRequest, chunkid string) {
 	rr.rep.Header().Set("Accept-Ranges", "bytes")
 
 	if err != nil {
-		rr.replyError(rr.rep, err)
+		rr.replyError(err)
 	} else {
 		rr.replyCode(http.StatusNoContent)
 	}
@@ -225,7 +193,7 @@ func downloadChunk(rr *rawxRequest, chunkid string) {
 		defer inChunk.Close()
 	}
 	if err != nil {
-		rr.replyError(rr.rep, err)
+		rr.replyError(err)
 		return
 	}
 
@@ -236,7 +204,7 @@ func downloadChunk(rr *rawxRequest, chunkid string) {
 		var last int64
 		nb, err := fmt.Fscanf(strings.NewReader(hdr_range), "bytes=%d-%d", &offset, &last)
 		if err != nil || nb != 2 || last <= offset {
-			rr.replyError(rr.rep, ErrInvalidRange)
+			rr.replyError(ErrInvalidRange)
 			return
 		}
 		size = last - offset + 1
@@ -313,7 +281,7 @@ func downloadChunk(rr *rawxRequest, chunkid string) {
 
 func removeChunk(rr *rawxRequest, chunkid string) {
 	if err := rr.rawx.repo.Del(chunkid); err != nil {
-		rr.replyError(rr.rep, err)
+		rr.replyError(err)
 	} else {
 		rr.replyCode(http.StatusNoContent)
 	}

@@ -18,7 +18,9 @@ package main
 
 import (
 	"bytes"
+	"container/list"
 	"errors"
+	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -182,13 +184,11 @@ func (r *FileRepository) Put(name string) (FileWriter, error) {
 	}
 }
 
-// Takes only the basename, check it is hexadecimal with a length of 64,
-// and computes the hashed path
-func (r *FileRepository) nameToPath(name string) (string, error) {
+func (r *FileRepository) nameToPathTokens(name string) ([]string, error) {
 
 	// Sanity checks and cleanups
 	if len(name) <= 0 {
-		return "", os.ErrInvalid
+		return make([]string, 0, 0), os.ErrInvalid
 	}
 	name = strings.Replace(filepath.Clean(name), "/", "@", -1)
 
@@ -200,8 +200,18 @@ func (r *FileRepository) nameToPath(name string) (string, error) {
 		tokens = append(tokens, name[start:start+r.HashWidth])
 	}
 
-	tokens = append(tokens, name)
-	return filepath.Join(tokens...), nil
+	return tokens, nil
+}
+
+// Takes only the basename, check it is hexadecimal with a length of 64,
+// and computes the hashed path
+func (r *FileRepository) nameToPath(name string) (string, error) {
+	if tokens, err := r.nameToPathTokens(name); err != nil {
+		return "", err
+	} else {
+		tokens = append(tokens, name)
+		return filepath.Join(tokens...), nil
+	}
 }
 
 type RealFileWriter struct {
@@ -315,4 +325,48 @@ func (r *RealFileReader) GetAttr(n string) ([]byte, error) {
 	} else {
 		return tmp[:sz], nil
 	}
+}
+
+func (self *FileRepository) List(marker, prefix string, max int) (ListSlice, error) {
+	out := ListSlice{make([]string, 0, 0), false}
+
+	// If both a prefix and a marker are set, if the marker is already
+	// greater than the prefix, no need to continue
+	if len(prefix) > 0 && len(marker) > 0 {
+		if marker > prefix {
+			out.Truncated = true
+			return out, nil
+		}
+	}
+
+	// Compute a path that is long enough to compute a full hashed directory,
+	// that is lexicographically greater than the marker
+	min_length := self.HashWidth * self.HashDepth
+	start := string(marker)
+	if prefix > start {
+		start = string(prefix)
+	}
+	if len(start) < min_length {
+		start = start + strings.Repeat(" ", min_length)
+	}
+
+	tokens, err := self.nameToPathTokens(start)
+	if err != nil {
+		return out, err
+	}
+
+	// Iterate
+
+	stack := list.New()
+	if l0, err := ioutil.ReadDir(self.root); err == nil {
+		for _, item := range l0 {
+			if item.Name() < tokens[0] {
+				continue
+			}
+			stack.PushFront(item)
+		}
+	}
+
+	// Deduce the starting directory for the fi
+	return out, ErrNotImplemented
 }

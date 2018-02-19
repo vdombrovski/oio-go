@@ -27,8 +27,8 @@ import (
 )
 
 type chunkRepository struct {
-	sub             Repository
-	accepted        [32]byte
+	sub      Repository
+	accepted [32]byte
 }
 
 func MakeChunkRepository(sub Repository) *chunkRepository {
@@ -38,12 +38,6 @@ func MakeChunkRepository(sub Repository) *chunkRepository {
 	r := new(chunkRepository)
 	r.sub = sub
 
-	hexa := []byte{
-		'0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-		'A', 'B', 'C', 'D', 'E', 'F'}
-	for _, c := range hexa {
-		r.accepted[c/8] |= (1 << (c % 8))
-	}
 	return r
 }
 
@@ -116,8 +110,8 @@ func (self *chunkRepository) Put(name string) (FileWriter, error) {
 // matches
 func (self *chunkRepository) nameToPath(name string) ([]string, error) {
 	name = strings.ToUpper(name)
-	if err := self.isValid(name); err != nil {
-		return nil, err
+	if !isValidString(name, 64) {
+		return nil, ErrInvalidChunkName
 	} else {
 		tab := make([]string, 1)
 		tab[0] = name
@@ -125,20 +119,14 @@ func (self *chunkRepository) nameToPath(name string) ([]string, error) {
 	}
 }
 
-func (self *chunkRepository) isValid(name string) error {
-	var i int
-	var n rune
-	for i, n = range name {
-		if !self.isValidChar(byte(n)) {
-			return ErrInvalidChunkName
-		}
-	}
-	if i == 63 {
-		return nil
-	}
-	return ErrInvalidChunkName
-}
+func (self *chunkRepository) List(marker, prefix string, max int) (ListSlice, error) {
+	out := ListSlice{make([]string, 0), false}
 
-func (self *chunkRepository) isValidChar(b byte) bool {
-	return 0 != (self.accepted[b/8] & (1 << (b % 8)))
+	if len(marker) > 0 && !isValidString(marker, 0) {
+		return out, ErrListMarker
+	}
+	if len(prefix) > 0 && !isValidString(prefix, 0) {
+		return out, ErrListPrefix
+	}
+	return self.sub.List(marker, prefix, max)
 }
