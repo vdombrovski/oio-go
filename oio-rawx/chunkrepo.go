@@ -26,20 +26,8 @@ import (
 	"strings"
 )
 
-const (
-	compressMethodGZIP = "gzip"
-	compressMethodLZ   = "lz"
-	compressMethodBZ2  = "bz2"
-)
-const (
-	compressEnabledDefault = false
-	compressMethodDefault  = compressMethodGZIP
-)
-
 type chunkRepository struct {
 	sub             Repository
-	compressEnabled bool
-	compressMethod  string
 	accepted        [32]byte
 }
 
@@ -49,8 +37,6 @@ func MakeChunkRepository(sub Repository) *chunkRepository {
 	}
 	r := new(chunkRepository)
 	r.sub = sub
-	r.compressEnabled = compressEnabledDefault
-	r.compressMethod = compressMethodDefault
 
 	hexa := []byte{
 		'0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
