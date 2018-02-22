@@ -34,6 +34,7 @@ const (
 	putOpenFlags = os.O_WRONLY | os.O_CREATE | os.O_EXCL
 	putOpenMode  = 0644
 	putMkdirMode = 0755
+	FALLOC_FL_PUNCH_HOLE = 2
 )
 
 type NoopNotifier struct{}
@@ -148,40 +149,44 @@ func (r *FileRepository) Get(name string) (FileReader, error) {
 	}
 }
 
-func (r *FileRepository) realPut(n, p string) (FileWriter, error) {
-	path_temp := p + ".pending"
-	f, err := os.OpenFile(path_temp, r.putOpenFlags, r.putOpenMode)
+// NOTE: allocated space needs to be deallocated afterwards in TE:Chunked mode if ns_chunk_size > received_chunk_size
+// by using FALLOC_FL_PUNCH_HOLE fallocate mode
+func (r *FileRepository) realPut(n, p string, cl int64, alloc bool) (FileWriter, FileWriter, error) {
+	tmpPath := p + ".pending"
+	f, err := os.OpenFile(tmpPath, r.putOpenFlags, r.putOpenMode)
 	if err == nil {
+		if alloc {
+			if err := syscall.Fallocate(int(f.Fd()), 0, 0, cl); err != nil {
+				return nil, nil, err
+			}
+		}
 		// Tempfile now open, ready to work with
 		if _, err = os.Stat(p); err == nil {
-			os.Remove(path_temp)
 			f.Close()
-			return nil, ErrChunkExists
+			os.Remove(tmpPath)
+			return nil, nil, ErrChunkExists
 		}
 
-		return &RealFileWriter{
-			name: p, path_final: p, path_temp: path_temp,
+		return nil, &RealFileWriter{
+			name: p, path_final: p, path_temp: tmpPath,
 			impl: f, notifier: r.notifier,
 			sync_file: r.sync_file, sync_dir: r.sync_dir,
 		}, nil
 	} else if os.IsNotExist(err) { // Lazy dir creation
 		err = os.MkdirAll(filepath.Dir(p), r.putMkdirMode)
 		if err == nil {
-			return r.realPut(n, p)
-		} else {
-			return nil, err
+			return r.realPut(n, p, cl, alloc)
 		}
-	} else {
-		return nil, err
 	}
+	return nil, nil, err
 }
 
-func (r *FileRepository) Put(name string) (FileWriter, error) {
-	if p, err := r.nameToPath(name); err != nil {
-		return nil, err
-	} else {
-		return r.realPut(name, p)
+func (r *FileRepository) Put(name string, cl int64, alloc bool) (FileWriter, FileWriter, error) {
+	p, err := r.nameToPath(name)
+	if err != nil {
+		return nil, nil, err
 	}
+	return r.realPut(name, p, cl, alloc)
 }
 
 func (r *FileRepository) nameToPathTokens(name string) ([]string, error) {

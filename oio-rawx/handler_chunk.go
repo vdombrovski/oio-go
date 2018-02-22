@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"strconv"
 )
 
 type chunkHandler struct {
@@ -131,17 +132,27 @@ func uploadChunk(rr *rawxRequest, chunkid string) {
 		}
 	}
 
-	// Attempt a PUT in the repository
-	out, err := rr.rawx.repo.Put(chunkid)
+	var ul upload
+	ul.in = rr.req.Body
+	ul.length = rr.req.ContentLength
+	if ul.length == 0 {
+		var err error
+		ul.length, err = strconv.ParseInt(rr.req.Header.Get(HeaderPrefix + AttrNameSize), 10, 64)
+		if err != nil {
+			rr.replyError(err)
+			return
+		}
+	}
+
+	// Attempt a PUT in the chunk repository
+	// Get the lrepo and the target FileWriters
+	lout, out, err := rr.rawx.repo.Put(chunkid, ul.length, false)
 	if err != nil {
 		rr.replyError(err)
 		return
 	}
 
 	// Upload, and maybe manage compression
-	var ul upload
-	ul.in = rr.req.Body
-	ul.length = rr.req.ContentLength
 
 	if rr.rawx.compress {
 		z := zlib.NewWriter(out)
@@ -163,9 +174,12 @@ func uploadChunk(rr *rawxRequest, chunkid string) {
 	if err != nil {
 		rr.replyError(err)
 		out.Abort()
+		lout.Abort()
 	} else {
 		out.Commit()
+		lout.Abort()
 		rr.rep.Header().Set("chunkhash", ul.h)
+		// TODO: send move event
 		rr.replyCode(http.StatusOK)
 	}
 }

@@ -24,25 +24,38 @@ alternative file names, etc.
 import (
 	"os"
 	"strings"
+	"errors"
 )
 
 type chunkRepository struct {
-	sub      Repository
+	subs     []Repository
+	sub      Repository // Temp (Compat)
+	lrepo    Repository
 	accepted [32]byte
 }
 
-func MakeChunkRepository(sub Repository) *chunkRepository {
-	if sub == nil {
-		panic("BUG : bad repository initiation")
-	}
+func MakeChunkRepository(lrepo Repository, subs []Repository) *chunkRepository {
+	// if sub == nil {
+	// 	panic("BUG : bad repository initiation")
+	// }
 	r := new(chunkRepository)
-	r.sub = sub
+	r.subs = subs
+	r.sub = subs[0]
+	r.lrepo = lrepo
 
 	return r
 }
 
 func (self *chunkRepository) Lock(ns, url string) error {
-	return self.sub.Lock(ns, url)
+	if err := self.lrepo.Lock(ns, url); err != nil {
+		return err
+	}
+	for _, sub := range self.subs {
+		if err := sub.Lock(ns, url); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (self *chunkRepository) Has(name string) (bool, error) {
@@ -90,20 +103,38 @@ func (self *chunkRepository) Get(name string) (FileReader, error) {
 	}
 }
 
-func (self *chunkRepository) Put(name string) (FileWriter, error) {
-	if names, err := self.nameToPath(name); err != nil {
-		return nil, err
-	} else {
-		for _, name := range names {
-			w, err := self.sub.Put(name)
-			if err == nil {
-				return w, nil
-			} else if err != os.ErrNotExist {
-				return nil, err
-			}
-		}
-		return nil, os.ErrNotExist
+// Put -- lock chunk in lrepo then get the first allocatable filerepo
+func (self *chunkRepository) Put(name string, cl int64, alloc bool) (FileWriter, FileWriter, error) {
+	names, err := self.nameToPath(name);
+	if err != nil {
+		return nil, nil, err
 	}
+	lw, err := putOne(self.lrepo, names, 0, false)
+	if err != nil {
+		// TODO: handle this
+	}
+	for _, sub := range self.subs {
+		w, err := putOne(sub, names, cl, true)
+		if err == ErrChunkExists {
+			return lw, nil, err
+		}
+		if err == nil {
+			return lw, w, nil
+		}
+	}
+	return lw, nil, errors.New("No more filerepos to try")
+}
+
+func putOne(sub Repository, names []string, cl int64, alloc bool) (FileWriter, error) {
+	for _, name := range names {
+		_, w, err := sub.Put(name, cl, alloc)
+		if err == nil {
+			return w, nil
+		} else if err != os.ErrNotExist {
+			return nil, err
+		}
+	}
+	return nil, nil
 }
 
 // Only accepts hexadecimal strings of 64 characters, and return potential

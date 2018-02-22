@@ -46,10 +46,19 @@ func checkNS(ns string) {
 	}
 }
 
+func checkMakeFileRepo(dir string) *FileRepository {
+	basedir := filepath.Clean(dir)
+	if !filepath.IsAbs(basedir) {
+		log.Fatalf("Filerepo path must be absolute, got %s", basedir)
+	}
+	return MakeFileRepository(basedir, nil)
+}
+
 
 func main() {
 	nsPtr := flag.String("ns", "OPENIO", "Namespace to run on")
 	addrPtr := flag.String("addr", "127.0.0.1:5999", "IP:PORT to run the rawx service on")
+	lrepoPtr := flag.String("lrepo", "/tmp/rawx-tmp", "Path to the chunk locking repo")
 
 	flag.Usage = func() {
 	        fmt.Fprintf(os.Stderr, "Usage of %s: [filerepo] (filerepo)\n", os.Args[0])
@@ -65,22 +74,14 @@ func main() {
 	checkNS(*nsPtr)
 	checkURL(*addrPtr)
 
- 	var filerepos = make([]*FileRepository, 0)
+ 	var filerepos []Repository
 
-	for _, repo := range flag.Args() {
-		basedir := filepath.Clean(repo)
-		if !filepath.IsAbs(basedir) {
-			log.Fatalf("Filerepo path must be absolute, got %s", basedir)
-		}
-		filerepos = append(filerepos, MakeFileRepository(basedir, nil))
+	for _, dir := range flag.Args() {
+		filerepos = append(filerepos, checkMakeFileRepo(dir))
 	}
 
-	if filerepos[0] == nil {
-		log.Fatalln("Invalid filerepo")
-	}
-
-	// TODO: Make chunk repo out of multiple filerepos
-	chunkrepo := MakeChunkRepository(filerepos[0])
+	// TODO: Make chunk repo out of multiple filerepos and a lock repo
+	chunkrepo := MakeChunkRepository(checkMakeFileRepo(*lrepoPtr), filerepos)
 	if err := chunkrepo.Lock(*nsPtr, *addrPtr); err != nil {
 		log.Fatalf("Basedir cannot be locked with xattr : %s", err.Error())
 	}

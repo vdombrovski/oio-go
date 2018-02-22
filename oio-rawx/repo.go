@@ -63,7 +63,7 @@ type Repository interface {
 	Lock(ns, url string) error
 	Has(name string) (bool, error)
 	Get(name string) (FileReader, error)
-	Put(name string) (FileWriter, error)
+	Put(name string, cl int64, alloc bool) (FileWriter, FileWriter, error)
 	Del(name string) error
 	List(marker, prefix string, max int) (ListSlice, error)
 }
