@@ -76,11 +76,13 @@ func (self *chunkRepository) Del(name string) error {
 		return err
 	} else {
 		for _, name := range names {
-			err = self.sub.Del(name)
-			if err == nil {
-				return nil // Success!
-			} else if err != os.ErrNotExist && !os.IsNotExist(err) {
-				return err
+			for _, sub := range self.subs {
+				err = sub.Del(name)
+				if err == nil {
+					return nil
+				} else if !os.IsNotExist(err) {
+					return err
+				}
 			}
 		}
 		return os.ErrNotExist

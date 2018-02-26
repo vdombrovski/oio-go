@@ -123,7 +123,8 @@ func (r *FileRepository) Del(name string) error {
 	if p, err := r.nameToPath(name); err != nil {
 		return err
 	} else {
-		if err := os.Remove(p); err == nil {
+		err := os.Remove(p)
+		if err == nil {
 			r.notifier.NotifyDel(name)
 		}
 		return err
