@@ -88,20 +88,23 @@ func (self *chunkRepository) Del(name string) error {
 }
 
 func (self *chunkRepository) Get(name string) (FileReader, error) {
-	if names, err := self.nameToPath(name); err != nil {
+	names, err := self.nameToPath(name)
+	if err != nil {
 		return nil, err
-	} else {
-		for _, name := range names {
-			r, err := self.sub.Get(name)
+	}
+	for _, name := range names {
+		for _, sub := range self.subs {
+			r, err := sub.Get(name)
 			if err == nil {
 				return r, nil
-			} else if err != os.ErrNotExist {
+			} else if !os.IsNotExist(err) {
 				return nil, err
 			}
 		}
-		return nil, os.ErrNotExist
 	}
+	return nil, os.ErrNotExist
 }
+
 
 // Put -- lock chunk in lrepo then get the first allocatable filerepo
 func (self *chunkRepository) Put(name string, cl int64, alloc bool) (FileWriter, FileWriter, error) {
