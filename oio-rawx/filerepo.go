@@ -158,6 +158,8 @@ func (r *FileRepository) realPut(n, p string, cl int64, alloc bool) (FileWriter,
 	if err == nil {
 		if alloc {
 			if err := syscall.Fallocate(int(f.Fd()), 0, 0, cl); err != nil {
+				f.Close()
+				os.Remove(tmpPath)
 				return nil, nil, err
 			}
 		}

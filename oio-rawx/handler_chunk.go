@@ -148,7 +148,9 @@ func uploadChunk(rr *rawxRequest, chunkid string) {
 	// Get the lrepo and the target FileWriters
 	lout, out, err := rr.rawx.repo.Put(chunkid, ul.length, false)
 	if err != nil {
-		lout.Abort()
+		if lout != nil {
+			lout.Abort()
+		}
 		rr.replyError(err)
 		return
 	}
