@@ -146,7 +146,7 @@ func uploadChunk(rr *rawxRequest, chunkid string) {
 
 	// Attempt a PUT in the chunk repository
 	// Get the lrepo and the target FileWriters
-	lout, out, err := rr.rawx.repo.Put(chunkid, ul.length, false)
+	src, lout, out, err := rr.rawx.repo.Put(chunkid, ul.length, false)
 	if err != nil {
 		if lout != nil {
 			lout.Abort()
@@ -180,6 +180,7 @@ func uploadChunk(rr *rawxRequest, chunkid string) {
 		lout.Abort()
 	} else {
 		out.Commit()
+		rr.rawx.repo.PushMoveOrder(src, chunkid)
 		lout.Abort()
 		rr.rep.Header().Set("chunkhash", ul.h)
 		// TODO: send move event

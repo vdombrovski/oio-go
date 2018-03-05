@@ -36,7 +36,7 @@ type rawxService struct {
 	ns            string
 	url           string
 	id            string
-	repo          Repository
+	repo          ChunkRepository
 	compress      bool
 	logger_access *log.Logger
 	logger_error  *log.Logger

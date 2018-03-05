@@ -59,6 +59,17 @@ var (
 	ErrListPrefix            = errors.New("Invalid listing prefix")
 )
 
+type ChunkRepository interface {
+	Lock(ns, url string) error
+	Has(name string) (bool, error)
+	Get(name string) (FileReader, error)
+	Put(name string, cl int64, alloc bool) (int, FileWriter, FileWriter, error)
+	Del(name string) error
+	List(marker, prefix string, max int) (ListSlice, error)
+	PushMoveOrder(int, string)
+	NameToPath(name string) ([]string, error)
+}
+
 type Repository interface {
 	Lock(ns, url string) error
 	Has(name string) (bool, error)
@@ -66,6 +77,7 @@ type Repository interface {
 	Put(name string, cl int64, alloc bool) (FileWriter, FileWriter, error)
 	Del(name string) error
 	List(marker, prefix string, max int) (ListSlice, error)
+	NameToPath(name string) (string, error)
 }
 
 type ListSlice struct {

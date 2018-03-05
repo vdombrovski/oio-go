@@ -32,6 +32,7 @@ type chunkRepository struct {
 	sub      Repository // Temp (Compat)
 	lrepo    Repository
 	accepted [32]byte
+	mover *Mover
 }
 
 func MakeChunkRepository(lrepo Repository, subs []Repository) *chunkRepository {
@@ -44,6 +45,14 @@ func MakeChunkRepository(lrepo Repository, subs []Repository) *chunkRepository {
 	r.lrepo = lrepo
 
 	return r
+}
+
+func (cr *chunkRepository) PushMoveOrder(src int, chunkid string) {
+	cr.mover.queue <- MoveOrder{
+		src: src,
+		chunkid: chunkid,
+		op: 0,
+	}
 }
 
 func (self *chunkRepository) Lock(ns, url string) error {
@@ -59,7 +68,7 @@ func (self *chunkRepository) Lock(ns, url string) error {
 }
 
 func (self *chunkRepository) Has(name string) (bool, error) {
-	if names, err := self.nameToPath(name); err != nil {
+	if names, err := self.NameToPath(name); err != nil {
 		return false, err
 	} else {
 		for _, name := range names {
@@ -72,7 +81,7 @@ func (self *chunkRepository) Has(name string) (bool, error) {
 }
 
 func (self *chunkRepository) Del(name string) error {
-	if names, err := self.nameToPath(name); err != nil {
+	if names, err := self.NameToPath(name); err != nil {
 		return err
 	} else {
 		for _, name := range names {
@@ -90,7 +99,7 @@ func (self *chunkRepository) Del(name string) error {
 }
 
 func (self *chunkRepository) Get(name string) (FileReader, error) {
-	names, err := self.nameToPath(name)
+	names, err := self.NameToPath(name)
 	if err != nil {
 		return nil, err
 	}
@@ -109,42 +118,43 @@ func (self *chunkRepository) Get(name string) (FileReader, error) {
 
 
 // Put -- lock chunk in lrepo then get the first allocatable filerepo
-func (self *chunkRepository) Put(name string, cl int64, alloc bool) (FileWriter, FileWriter, error) {
-	names, err := self.nameToPath(name);
+// TODO: Use struct here  (too many args)
+func (self *chunkRepository) Put(name string, cl int64, alloc bool) (int, FileWriter, FileWriter, error) {
+	names, err := self.NameToPath(name);
 	if err != nil {
-		return nil, nil, err
+		return 0, nil, nil, err
 	}
-	lw, err := putOne(self.lrepo, names, 0, false)
+	_, lw, err := putOne(self.lrepo, names, 0, false)
 	if err != nil {
 		// TODO: handle this
 	}
 	for _, sub := range self.subs {
-		w, err := putOne(sub, names, cl, true)
+		src, w, err := putOne(sub, names, cl, true)
 		if err == ErrChunkExists {
-			return lw, nil, err
+			return 0, lw, nil, err
 		}
 		if err == nil {
-			return lw, w, nil
+			return src, lw, w, nil
 		}
 	}
-	return lw, nil, errors.New("No more filerepos to try")
+	return 0, lw, nil, errors.New("No more filerepos to try")
 }
 
-func putOne(sub Repository, names []string, cl int64, alloc bool) (FileWriter, error) {
-	for _, name := range names {
+func putOne(sub Repository, names []string, cl int64, alloc bool) (int, FileWriter, error) {
+	for src, name := range names {
 		_, w, err := sub.Put(name, cl, alloc)
 		if err == nil {
-			return w, nil
+			return src, w, nil
 		} else if err != os.ErrNotExist {
-			return nil, err
+			return 0, nil, err
 		}
 	}
-	return nil, nil
+	return 0, nil, nil
 }
 
 // Only accepts hexadecimal strings of 64 characters, and return potential
 // matches
-func (self *chunkRepository) nameToPath(name string) ([]string, error) {
+func (self *chunkRepository) NameToPath(name string) ([]string, error) {
 	name = strings.ToUpper(name)
 	if !isValidString(name, 64) {
 		return nil, ErrInvalidChunkName

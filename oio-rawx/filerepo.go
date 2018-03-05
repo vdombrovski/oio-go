@@ -110,7 +110,7 @@ func (r *FileRepository) Lock(ns, url string) error {
 }
 
 func (r *FileRepository) Has(name string) (bool, error) {
-	if p, err := r.nameToPath(name); err != nil {
+	if p, err := r.NameToPath(name); err != nil {
 		return false, err
 	} else if _, err := os.Stat(p); err != nil {
 		return false, err
@@ -120,7 +120,7 @@ func (r *FileRepository) Has(name string) (bool, error) {
 }
 
 func (r *FileRepository) Del(name string) error {
-	if p, err := r.nameToPath(name); err != nil {
+	if p, err := r.NameToPath(name); err != nil {
 		return err
 	} else {
 		err := os.Remove(p)
@@ -143,7 +143,7 @@ func realGet(p string) (FileReader, error) {
 }
 
 func (r *FileRepository) Get(name string) (FileReader, error) {
-	if p, err := r.nameToPath(name); err != nil {
+	if p, err := r.NameToPath(name); err != nil {
 		return nil, err
 	} else {
 		return realGet(p)
@@ -185,7 +185,7 @@ func (r *FileRepository) realPut(n, p string, cl int64, alloc bool) (FileWriter,
 }
 
 func (r *FileRepository) Put(name string, cl int64, alloc bool) (FileWriter, FileWriter, error) {
-	p, err := r.nameToPath(name)
+	p, err := r.NameToPath(name)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -213,7 +213,7 @@ func (r *FileRepository) nameToPathTokens(name string) ([]string, error) {
 
 // Takes only the basename, check it is hexadecimal with a length of 64,
 // and computes the hashed path
-func (r *FileRepository) nameToPath(name string) (string, error) {
+func (r *FileRepository) NameToPath(name string) (string, error) {
 	if tokens, err := r.nameToPathTokens(name); err != nil {
 		return "", err
 	} else {

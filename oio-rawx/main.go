@@ -86,6 +86,10 @@ func main() {
 		log.Fatalf("Basedir cannot be locked with xattr : %s", err.Error())
 	}
 
+	mover := MakeMover(*chunkrepo)
+	chunkrepo.mover = mover
+	go mover.Run()
+
 	prepareServe(*nsPtr, *addrPtr, chunkrepo)
 }
 
