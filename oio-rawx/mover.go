@@ -119,74 +119,74 @@ func (m* Mover) movePut(dst Repository, name string, p string, cl int64, alloc b
 }
 
 func (m *Mover) move(src Repository, dst Repository, chunkid string) error {
-    if names, err := m.cr.NameToPath(chunkid); err != nil {
-		return err
-	} else {
-		for _, name := range names {
-			if v, _ := src.Has(name); v {
-                srcPath, err := src.NameToPath(name);
-                if err != nil {
-            		return err
-            	}
-                srcFile, err := os.OpenFile(srcPath, os.O_RDONLY, 0)
-                if err != nil {
-                    return err
-                }
-
-                // Get src file length
-                fi, err := srcFile.Stat()
-                if err != nil {
-                    return err
-                }
-                cl := fi.Size()
-                srcFD := int(srcFile.Fd())
-
-                dstPath, err := dst.NameToPath(name)
-            	if err != nil {
-            		return err
-            	}
-
-                dstFile, err := m.movePut(dst, name, dstPath, cl, true)
-                if err != nil {
-                    return err
-                }
-                dstFD := int(dstFile.Fd())
-
-                if _, err := syscall.Sendfile(dstFD, srcFD, nil, int(cl)); err != nil {
-                    return err
-                }
-                // Commit
-
-                if err := syscall.Fsync(dstFD); err != nil {
-                    return err
-                }
-
-                srcFile.Close()
-                dstFile.Close()
-
-                // Cleanup moved file
-                if _, err := os.Stat(srcPath); err != nil {
-                    if _, err := os.Stat(dstPath + ".pending"); err == nil {
-                        if err := os.Remove(dstPath + ".pending"); err != nil {
-                            return err
-                        }
-                    }
-                    return nil
-                }
-
-                if err := syscall.Rename(dstPath + ".pending", dstPath); err != nil {
-                    return err
-                }
-                if err := os.Symlink(dstPath, srcPath + ".lnk"); err != nil {
-                    return err
-                }
-                if err := os.Rename(srcPath + ".lnk", srcPath); err != nil {
-                    return err
-                }
-			} else {
-                // TODO: handle this
+    names, err := m.cr.NameToPath(chunkid);
+    if err != nil {
+        return err
+    }
+	for _, name := range names {
+		if v, _ := src.Has(name); v {
+            srcPath, err := src.NameToPath(name);
+            if err != nil {
+        		return err
+        	}
+            srcFile, err := os.OpenFile(srcPath, os.O_RDONLY, 0)
+            if err != nil {
+                return err
             }
-		}
-		return nil
+
+            // Get src file length
+            fi, err := srcFile.Stat()
+            if err != nil {
+                return err
+            }
+            cl := fi.Size()
+            srcFD := int(srcFile.Fd())
+
+            dstPath, err := dst.NameToPath(name)
+        	if err != nil {
+        		return err
+        	}
+
+            dstFile, err := m.movePut(dst, name, dstPath, cl, true)
+            if err != nil {
+                return err
+            }
+            dstFD := int(dstFile.Fd())
+
+            if _, err := syscall.Sendfile(dstFD, srcFD, nil, int(cl)); err != nil {
+                return err
+            }
+            // Commit
+
+            if err := syscall.Fsync(dstFD); err != nil {
+                return err
+            }
+
+            srcFile.Close()
+            dstFile.Close()
+
+            // Cleanup moved file
+            if _, err := os.Stat(srcPath); err != nil {
+                if _, err := os.Stat(dstPath + ".pending"); err == nil {
+                    if err := os.Remove(dstPath + ".pending"); err != nil {
+                        return err
+                    }
+                }
+                return nil
+            }
+
+            if err := syscall.Rename(dstPath + ".pending", dstPath); err != nil {
+                return err
+            }
+            if err := os.Symlink(dstPath, srcPath + ".lnk"); err != nil {
+                return err
+            }
+            if err := os.Rename(srcPath + ".lnk", srcPath); err != nil {
+                return err
+            }
+		} else {
+            // TODO: handle this
+        }
 	}
+	return nil
 }

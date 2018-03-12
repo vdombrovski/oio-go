@@ -30,20 +30,18 @@ import (
 
 type chunkRepository struct {
 	subs     []Repository
-	sub      Repository // Temp (Compat)
-	lrepo    Repository
+	sub      Repository
 	accepted [32]byte
 	mover *Mover
 }
 
-func MakeChunkRepository(lrepo Repository, subs []Repository) *chunkRepository {
+func MakeChunkRepository(subs []Repository) *chunkRepository {
 	// if sub == nil {
 	// 	panic("BUG : bad repository initiation")
 	// }
 	r := new(chunkRepository)
 	r.subs = subs
 	r.sub = subs[0]
-	r.lrepo = lrepo
 
 	return r
 }
@@ -57,9 +55,6 @@ func (cr *chunkRepository) PushMoveOrder(src int, chunkid string) {
 }
 
 func (self *chunkRepository) Lock(ns, url string) error {
-	if err := self.lrepo.Lock(ns, url); err != nil {
-		return err
-	}
 	for _, sub := range self.subs {
 		if err := sub.Lock(ns, url); err != nil {
 			return err
@@ -88,18 +83,7 @@ func (self *chunkRepository) Del(name string) error {
 	}
 	deleted := false
 	for _, name := range names {
-		// for i := len(self.subs) - 1; i >= 0; i-- {
 		for i, _ := range self.subs {
-			log.Printf("Delete order %d", i)
-			// for _, n := range([]string{name + ".pending", name}) {
-			// 	err = self.subs[i].Del(n)
-			// 	if err != nil && !os.IsNotExist(err) {
-			// 		log.Printf("Delete ERROR %s", err.Error())
-			// 		return err
-			// 	} else if err == nil {
-			// 		deleted = true
-			// 	}
-			// }
 			err = self.subs[i].Del(name)
 			if err != nil && !os.IsNotExist(err) {
 				log.Printf("Delete ERROR %s", err.Error())
@@ -133,17 +117,14 @@ func (self *chunkRepository) Get(name string) (FileReader, error) {
 	return nil, os.ErrNotExist
 }
 
-
-// Put -- lock chunk in lrepo then get the first allocatable filerepo
-// TODO: Use struct here  (too many args)
 func (self *chunkRepository) Put(name string, cl int64, alloc bool) (int, FileWriter, FileWriter, error) {
 	names, err := self.NameToPath(name);
 	if err != nil {
 		return 0, nil, nil, err
 	}
-	_, lw, err := putOne(self.lrepo, names, 0, false)
+	_, lw, err := putOne(self.subs[0], names, 0, false)
 	if err != nil {
-		// TODO: handle this
+		return 0, nil, nil, err
 	}
 	for _, sub := range self.subs {
 		src, w, err := putOne(sub, names, cl, true)
@@ -159,6 +140,9 @@ func (self *chunkRepository) Put(name string, cl int64, alloc bool) (int, FileWr
 
 func putOne(sub Repository, names []string, cl int64, alloc bool) (int, FileWriter, error) {
 	for src, name := range names {
+		if !alloc {
+			name = name + ".lock"
+		}
 		_, w, err := sub.Put(name, cl, alloc)
 		if err == nil {
 			return src, w, nil

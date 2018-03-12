@@ -145,7 +145,7 @@ func uploadChunk(rr *rawxRequest, chunkid string) {
 	}
 
 	// Attempt a PUT in the chunk repository
-	// Get the lrepo and the target FileWriters
+	// Get the first repo for locking and the target FileWriters
 	src, lout, out, err := rr.rawx.repo.Put(chunkid, ul.length, false)
 	if err != nil {
 		if lout != nil {

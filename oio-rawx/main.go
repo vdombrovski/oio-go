@@ -58,7 +58,7 @@ func checkMakeFileRepo(dir string) *FileRepository {
 func main() {
 	nsPtr := flag.String("ns", "OPENIO", "Namespace to run on")
 	addrPtr := flag.String("addr", "127.0.0.1:5999", "IP:PORT to run the rawx service on")
-	lrepoPtr := flag.String("lrepo", "/tmp/rawx-tmp", "Path to the chunk locking repo")
+	// lrepoPtr := flag.String("lrepo", "/tmp/rawx-tmp", "Path to the chunk locking repo")
 
 	flag.Usage = func() {
 	        fmt.Fprintf(os.Stderr, "Usage of %s: [filerepo] (filerepo)\n", os.Args[0])
@@ -81,7 +81,7 @@ func main() {
 	}
 
 	// TODO: Make chunk repo out of multiple filerepos and a lock repo
-	chunkrepo := MakeChunkRepository(checkMakeFileRepo(*lrepoPtr), filerepos)
+	chunkrepo := MakeChunkRepository(filerepos)
 	if err := chunkrepo.Lock(*nsPtr, *addrPtr); err != nil {
 		log.Fatalf("Basedir cannot be locked with xattr : %s", err.Error())
 	}
