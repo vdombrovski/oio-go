@@ -25,6 +25,7 @@ import (
 	"os"
 	"strings"
 	"errors"
+	"log"
 )
 
 type chunkRepository struct {
@@ -81,21 +82,37 @@ func (self *chunkRepository) Has(name string) (bool, error) {
 }
 
 func (self *chunkRepository) Del(name string) error {
-	if names, err := self.NameToPath(name); err != nil {
+	names, err := self.NameToPath(name);
+	if err != nil {
 		return err
-	} else {
-		for _, name := range names {
-			for _, sub := range self.subs {
-				err = sub.Del(name)
-				if err == nil {
-					return nil
-				} else if !os.IsNotExist(err) {
-					return err
-				}
+	}
+	deleted := false
+	for _, name := range names {
+		// for i := len(self.subs) - 1; i >= 0; i-- {
+		for i, _ := range self.subs {
+			log.Printf("Delete order %d", i)
+			// for _, n := range([]string{name + ".pending", name}) {
+			// 	err = self.subs[i].Del(n)
+			// 	if err != nil && !os.IsNotExist(err) {
+			// 		log.Printf("Delete ERROR %s", err.Error())
+			// 		return err
+			// 	} else if err == nil {
+			// 		deleted = true
+			// 	}
+			// }
+			err = self.subs[i].Del(name)
+			if err != nil && !os.IsNotExist(err) {
+				log.Printf("Delete ERROR %s", err.Error())
+				return err
+			} else if err == nil {
+				deleted = true
 			}
 		}
+	}
+	if !deleted {
 		return os.ErrNotExist
 	}
+	return nil
 }
 
 func (self *chunkRepository) Get(name string) (FileReader, error) {
@@ -154,6 +171,7 @@ func putOne(sub Repository, names []string, cl int64, alloc bool) (int, FileWrit
 
 // Only accepts hexadecimal strings of 64 characters, and return potential
 // matches
+// TODO: Why do we need a slice here?
 func (self *chunkRepository) NameToPath(name string) ([]string, error) {
 	name = strings.ToUpper(name)
 	if !isValidString(name, 64) {

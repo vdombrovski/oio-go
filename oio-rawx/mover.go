@@ -68,23 +68,20 @@ func MakeMover(cr chunkRepository) *Mover  {
 func (m *Mover) Run() {
     for {
         order := <- m.queue
-        log.Printf("Move order received %d", order.src)
         if order.src < 0 ||
            order.src > m.len + 1 ||
            (order.src < 1 && order.op == 2) ||
            (order.src > m.len && order.op == 0) {
             log.Println(ErrInvalidMove)
-            log.Printf("data %d", m.len)
             continue
         }
         switch order.op {
         case 0, 2:
-                err := m.move(m.cr.subs[order.src], m.cr.subs[order.src + (1 - order.op)], order.chunkid)
-                if err != nil {
-                    log.Println(err)
-                }
-                log.Printf("Move order completed %s", order.chunkid)
-                break
+            if err := m.move(m.cr.subs[order.src], m.cr.subs[order.src + (1 - order.op)], order.chunkid); err != nil {
+                log.Println(err)
+            }
+            log.Printf("Move order completed %s", order.chunkid)
+            break
         }
     }
 }
@@ -122,15 +119,6 @@ func (m* Mover) movePut(dst Repository, name string, p string, cl int64, alloc b
 }
 
 func (m *Mover) move(src Repository, dst Repository, chunkid string) error {
-    // TODO:  - Find chunk  X
-    // Open SRC             X
-    // Read size            X
-    // Open + Fallocate DST x
-    // Sendfile             x
-    // Close DST
-    // os.remove(src)
-    // Close SRC
-
     if names, err := m.cr.NameToPath(chunkid); err != nil {
 		return err
 	} else {
@@ -176,10 +164,23 @@ func (m *Mover) move(src Repository, dst Repository, chunkid string) error {
                 srcFile.Close()
                 dstFile.Close()
 
+                // Cleanup moved file
+                if _, err := os.Stat(srcPath); err != nil {
+                    if _, err := os.Stat(dstPath + ".pending"); err == nil {
+                        if err := os.Remove(dstPath + ".pending"); err != nil {
+                            return err
+                        }
+                    }
+                    return nil
+                }
+
                 if err := syscall.Rename(dstPath + ".pending", dstPath); err != nil {
                     return err
                 }
-                if err := os.Remove(srcPath); err != nil {
+                if err := os.Symlink(dstPath, srcPath + ".lnk"); err != nil {
+                    return err
+                }
+                if err := os.Rename(srcPath + ".lnk", srcPath); err != nil {
                     return err
                 }
 			} else {
