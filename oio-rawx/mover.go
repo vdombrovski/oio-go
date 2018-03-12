@@ -72,7 +72,6 @@ func (m *Mover) Run() {
            order.src > m.len + 1 ||
            (order.src < 1 && order.op == 2) ||
            (order.src > m.len && order.op == 0) {
-            log.Println(ErrInvalidMove)
             continue
         }
         switch order.op {
@@ -80,7 +79,6 @@ func (m *Mover) Run() {
             if err := m.move(m.cr.subs[order.src], m.cr.subs[order.src + (1 - order.op)], order.chunkid); err != nil {
                 log.Println(err)
             }
-            log.Printf("Move order completed %s", order.chunkid)
             break
         }
     }

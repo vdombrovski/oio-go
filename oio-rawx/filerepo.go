@@ -261,7 +261,6 @@ func (w *RealFileWriter) Abort() error {
 
 func (w *RealFileWriter) syncFile() {
 	if w.sync_file {
-		//w.impl.Sync()
 		syscall.Fdatasync(int(w.impl.Fd()))
 	}
 }

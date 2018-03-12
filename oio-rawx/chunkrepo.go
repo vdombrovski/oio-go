@@ -25,7 +25,6 @@ import (
 	"os"
 	"strings"
 	"errors"
-	"log"
 )
 
 type chunkRepository struct {
@@ -86,7 +85,6 @@ func (self *chunkRepository) Del(name string) error {
 		for i, _ := range self.subs {
 			err = self.subs[i].Del(name)
 			if err != nil && !os.IsNotExist(err) {
-				log.Printf("Delete ERROR %s", err.Error())
 				return err
 			} else if err == nil {
 				deleted = true
