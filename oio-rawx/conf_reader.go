@@ -12,6 +12,7 @@ func ReadConfig(conf string) (map[string]string, error) {
             "Listen": "addr",
             "grid_filerepos": "filerepos",
             "grid_namespace": "ns",
+            "grid_docroot": "filerepo",
     }
     var opts = make(map[string]string)
     f, err := os.OpenFile(conf, os.O_RDONLY, os.ModePerm)

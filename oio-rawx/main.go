@@ -69,8 +69,13 @@ func main() {
 
  	var filerepos []Repository
 
-	for _, dir := range strings.Split(opts["filerepos"], ",") {
-		filerepos = append(filerepos, checkMakeFileRepo(dir))
+	if _, ok := opts["filerepos"]; ok {
+		for _, dir := range strings.Split(opts["filerepos"], ",") {
+			filerepos = append(filerepos, checkMakeFileRepo(dir))
+		}
+	} else {
+		// Fallback to old rawx
+		filerepos = append(filerepos, checkMakeFileRepo(opts["filerepo"]))
 	}
 
 	chunkrepo := MakeChunkRepository(filerepos)
