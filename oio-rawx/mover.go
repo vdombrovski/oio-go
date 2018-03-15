@@ -22,18 +22,6 @@ import (
     "os"
     "syscall"
     "path/filepath"
-	// "bytes"
-	// "compress/zlib"
-	// "crypto/md5"
-	// "encoding/hex"
-	// "fmt"
-	// "io"
-	// "io/ioutil"
-	// "log"
-	// "net/http"
-	//
-	// "strings"
-	// "strconv"
 )
 
 var (

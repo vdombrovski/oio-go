@@ -29,8 +29,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"regexp"
-	"os"
-	"fmt"
+	"strings"
 )
 
 func checkURL(url string) {
@@ -56,31 +55,26 @@ func checkMakeFileRepo(dir string) *FileRepository {
 
 
 func main() {
-	nsPtr := flag.String("ns", "OPENIO", "Namespace to run on")
-	addrPtr := flag.String("addr", "127.0.0.1:5999", "IP:PORT to run the rawx service on")
-
-	flag.Usage = func() {
-	        fmt.Fprintf(os.Stderr, "Usage of %s: [filerepo] (filerepo)\n", os.Args[0])
-	        flag.PrintDefaults()
-	}
-
+	_ = flag.String("D", "UNUSED", "Unused compatibility flag")
+	confPtr := flag.String("f", "/etc/oio/sds/OPENIO/rawx-0/rawx-0-httpd.conf", "Absolute path to config file")
 	flag.Parse()
 
-	if flag.NArg() == 0 {
-		log.Fatalln("Missing target filerepo(s)")
+	opts, err := ReadConfig(*confPtr)
+	if err != nil {
+		log.Fatalf("Exiting with error %s", err.Error())
 	}
 
-	checkNS(*nsPtr)
-	checkURL(*addrPtr)
+	checkNS(opts["ns"])
+	checkURL(opts["addr"])
 
  	var filerepos []Repository
 
-	for _, dir := range flag.Args() {
+	for _, dir := range strings.Split(opts["filerepos"], ",") {
 		filerepos = append(filerepos, checkMakeFileRepo(dir))
 	}
 
 	chunkrepo := MakeChunkRepository(filerepos)
-	if err := chunkrepo.Lock(*nsPtr, *addrPtr); err != nil {
+	if err := chunkrepo.Lock(opts["ns"], opts["addr"]); err != nil {
 		log.Fatalf("Basedir cannot be locked with xattr : %s", err.Error())
 	}
 
@@ -88,7 +82,7 @@ func main() {
 	chunkrepo.mover = mover
 	// TODO: Maybe implement as a pool
 	go mover.Run()
-	prepareServe(*nsPtr, *addrPtr, chunkrepo)
+	prepareServe(opts["ns"], opts["addr"], chunkrepo)
 }
 
 func prepareServe(ns string, url string, chunkrepo *chunkRepository) {
